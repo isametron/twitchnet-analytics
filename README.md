@@ -1,0 +1,281 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/streamlit-1.28+-red.svg" alt="Streamlit">
+  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT">
+  <img src="https://img.shields.io/badge/twitch-API-purple.svg" alt="Twitch API">
+</p>
+
+<h1 align="center">🎮 TwitchNet Analytics</h1>
+
+<p align="center">
+  <strong>Network analysis and recommendation system for Twitch streamer partnerships</strong>
+</p>
+
+<p align="center">
+  Collect Twitch streamer data • Build relationship graphs • Perform centrality analysis • Detect communities • Recommend streamers for brand partnerships
+</p>
+
+---
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 📊 Data Collection
+- Twitch API integration with rate limiting
+- Exponential backoff on API errors
+- Multi-language streamer discovery
+- Follower count, game, tags, partner status
+
+</td>
+<td width="50%">
+
+### 🕸️ Network Analysis
+- Multi-reason edge connections
+- Precomputed server-side layout
+- Edge capping for performance
+- 8+ centrality metrics
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 👥 Community Detection
+- Louvain algorithm partitioning
+- Bridge node identification
+- Cross-game community detection
+- Community statistics & insights
+
+</td>
+<td width="50%">
+
+### 🎯 Recommendations
+- Content similarity matching
+- Multi-objective optimization
+- Budget allocation algorithms
+- Brand safety scoring
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🖼️ Screenshots
+
+<details>
+<summary>Click to expand screenshots</summary>
+
+### Network Visualization
+> Interactive PyVis network graph showing streamer connections
+
+### Analytics Dashboard
+> Centrality scores, community stats, and demographic breakdowns
+
+### Recommendation Engine
+> Company profile matching with ROI estimation
+
+</details>
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.9+
+- [Twitch Developer Account](https://dev.twitch.tv/console)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/twitchnet-analytics.git
+cd twitchnet-analytics
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# or
+.\.venv\Scripts\Activate.ps1  # Windows PowerShell
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your Twitch API credentials
+```
+
+### Usage
+
+```bash
+# Start the dashboard
+streamlit run app.py
+```
+
+Then open http://localhost:8501 in your browser.
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         STREAMLIT UI (app.py)                       │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐│
+│  │   Network    │ │  Analytics   │ │  Dashboard   │ │   Data      ││
+│  │   Analysis   │ │   Charts     │ │   Metrics    │ │ Collection  ││
+│  └──────────────┘ └──────────────┘ └──────────────┘ └─────────────┘│
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+         ┌────────────────────────┼────────────────────────┐
+         ▼                        ▼                        ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────┐
+│  twitch_api.py  │    │ graph_builder.py│    │   recommender.py    │
+│  Data Collector │    │ Network Builder │    │ Recommendation      │
+└─────────────────┘    └─────────────────┘    └─────────────────────┘
+         │                        │                        │
+         ▼                        ▼                        ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────┐
+│  centrality.py  │    │community_detect │    │    scoring.py       │
+│  Network Metrics│    │ Louvain Algo    │    │ Advanced Scoring    │
+└─────────────────┘    └─────────────────┘    └─────────────────────┘
+```
+
+---
+
+## 📁 Project Structure
+
+```
+twitchnet-analytics/
+├── 📄 app.py                 # Streamlit UI entrypoint
+├── 📄 main.py                # CLI entrypoint
+├── 📄 config.py              # Configuration settings
+│
+├── 🔌 Core Modules
+│   ├── twitch_api.py         # Twitch API data collector
+│   ├── graph_builder.py      # Network graph construction
+│   ├── centrality.py         # Centrality calculations
+│   ├── community_detection.py# Louvain community detection
+│   ├── similarity_calc.py    # Feature extraction & similarity
+│   ├── recommender.py        # Recommendation engine
+│   └── scoring.py            # Advanced scoring algorithms
+│
+├── 🎨 UI & Visualization
+│   ├── network_viz.py        # PyVis visualization
+│   ├── advanced_viz.py       # Plotly charts
+│   ├── dashboard.py          # Dashboard metrics
+│   └── styles.py             # Custom CSS theming
+│
+├── 💾 Data Layer
+│   ├── database.py           # SQLite persistence
+│   └── company_profiles.py   # Company profile management
+│
+├── 📂 data/
+│   ├── raw/                  # Raw API responses
+│   ├── processed/            # Processed CSV files
+│   └── network_graphs/       # Serialized graphs
+│
+├── 📂 lib/                   # Frontend JS libraries
+└── 📂 scripts/               # Utility scripts
+```
+
+---
+
+## 📈 Centrality Metrics
+
+| Metric | Description | Use Case |
+|--------|-------------|----------|
+| **PageRank** | Influence via incoming links | Find influential streamers |
+| **Degree** | Number of connections | Find well-networked streamers |
+| **Betweenness** | Bridge between communities | Find diverse audience reach |
+| **Closeness** | Average distance to others | Find central streamers |
+| **Eigenvector** | Connected to important nodes | Find elite circles |
+| **Harmonic** | Works on disconnected graphs | Handle fragmented networks |
+| **Load** | Bottleneck identification | Find key connectors |
+| **Clustering** | Local connectivity | Find tight-knit groups |
+| **Influence** | Weighted composite | Overall recommendation ranking |
+
+---
+
+## ⚙️ Configuration
+
+Edit `config.py` to customize:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `MIN_FOLLOWERS` | 100 | Minimum followers to include |
+| `MAX_STREAMERS` | 1000 | Maximum streamers to analyze |
+| `CONTENT_SIMILARITY_WEIGHT` | 0.4 | Content matching weight |
+| `CENTRALITY_WEIGHT` | 0.3 | Network position weight |
+| `ENGAGEMENT_WEIGHT` | 0.2 | Engagement metrics weight |
+| `AUDIENCE_FIT_WEIGHT` | 0.1 | Audience demographics weight |
+
+---
+
+## 🧪 Data Pipeline
+
+```
+COLLECT → BUILD → ANALYZE → VISUALIZE
+
+Twitch API → NetworkX Graph → Centrality + Louvain → PyVis + Plotly
+    │              │                  │                    │
+    ▼              ▼                  ▼                    ▼
+streamers.json  .gpickle      centrality.csv        network.html
+                              communities.csv
+```
+
+---
+
+## 🔧 Troubleshooting
+
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+| Problem | Solution |
+|---------|----------|
+| Streamlit won't start | Run `python -m py_compile app.py` to check for syntax errors |
+| Blank network visualization | Open `network.html` directly in browser |
+| Slow graph rendering | Reduce edge cap in settings or filter to subgraph |
+| Twitch API rate limits | Built-in backoff handles this; wait 10+ min if persistent |
+| Missing CSV files | Run data collection step in the UI first |
+
+</details>
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) first.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [Twitch API](https://dev.twitch.tv/docs/api/) for streamer data
+- [NetworkX](https://networkx.org/) for graph algorithms
+- [PyVis](https://pyvis.readthedocs.io/) for interactive visualizations
+- [Streamlit](https://streamlit.io/) for the dashboard framework
+- [python-louvain](https://github.com/taynaud/python-louvain) for community detection
+
+---
+
+<p align="center">
+  Made with ❤️ for the Twitch community
+</p>
