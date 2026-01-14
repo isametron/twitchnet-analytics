@@ -71,12 +71,17 @@
 
 ### Network Visualization
 > Interactive PyVis network graph showing streamer connections
+<img width="1919" height="899" alt="Screenshot 2025-12-30 021316" src="https://github.com/user-attachments/assets/f6c864a5-1ecd-47ab-8abc-93c0f71f1179" />
+<img width="1919" height="803" alt="Screenshot 2025-12-30 021414" src="https://github.com/user-attachments/assets/a3a541d3-a5bd-4224-b169-284fa4e03908" />
 
 ### Analytics Dashboard
 > Centrality scores, community stats, and demographic breakdowns
+<img width="1919" height="768" alt="Screenshot 2025-12-30 021345" src="https://github.com/user-attachments/assets/95b1c881-a5fb-4e52-b890-c9ebbae357a9" />
+<img width="1919" height="893" alt="Screenshot 2025-12-30 021543" src="https://github.com/user-attachments/assets/53a6fff4-d7c4-4578-b7df-5890908b1bc5" />
 
 ### Recommendation Engine
 > Company profile matching with ROI estimation
+<img width="1918" height="855" alt="Screenshot 2025-12-30 022050" src="https://github.com/user-attachments/assets/2916ffe7-b3e5-4a28-baa2-5d07af9298bb" />
 
 </details>
 
