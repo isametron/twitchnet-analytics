@@ -67,7 +67,7 @@ def analyze_network(builder):
     
     # Calculate centrality
     analyzer = CentralityAnalyzer(builder.graph)
-    centrality_scores = analyzer.calculate_all_centralities()
+    analyzer.calculate_all_centralities()
     analyzer.save_centrality_scores()
     
     print("\nTop 5 Influencers (PageRank):")
@@ -153,6 +153,8 @@ async def main():
     print("Social Network Analysis Project")
     print("="*70)
     
+    Config.make_console_safe()
+
     # Create directories
     Config.create_directories()
     
@@ -172,7 +174,7 @@ async def main():
     analyzer, detector = analyze_network(builder)
     
     # Generate recommendations
-    recommendations = generate_recommendations(streamers, analyzer.centrality_scores)
+    generate_recommendations(streamers, analyzer.centrality_scores)
     
     print("\n" + "="*70)
     print("PIPELINE COMPLETE!")

@@ -205,17 +205,18 @@ class StreamerNetworkBuilder:
 
         print(f"Added {edges_added} new edges based on viewer tier similarity")
     
-    def build_comprehensive_network(self, use_all_methods: bool = True):
+    def build_comprehensive_network(self, use_all_methods: bool = True, weight_by_audience: bool = True):
         """
         Build a comprehensive network using all available edge creation methods
         
         Args:
             use_all_methods: If True, uses all edge creation methods
+            weight_by_audience: If True, weight same-game edges by combined audience reach
         """
         print("\nBuilding comprehensive network...")
         
         # Core connections
-        self.add_edges_from_shared_games(weight_by_audience=True)
+        self.add_edges_from_shared_games(weight_by_audience=weight_by_audience)
         
         if use_all_methods:
             self.add_edges_from_tags(similarity_threshold=0.3)
@@ -322,7 +323,7 @@ class StreamerNetworkBuilder:
         edges_df = pd.DataFrame(edges_data)
         edges_df.to_csv(f"{Config.PROCESSED_DATA_DIR}/{edges_file}", index=False)
         
-        print(f"Graph exported to CSV files")
+        print("Graph exported to CSV files")
 
 
 if __name__ == "__main__":
@@ -343,4 +344,3 @@ if __name__ == "__main__":
         print(f"  {key}: {value}")
     
     builder.save_graph()
-from graph_builder import StreamerNetworkBuilder

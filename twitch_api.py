@@ -219,7 +219,7 @@ class TwitchDataCollector:
                 async for ch in channel_gen:
                     channel_info = ch
                     break
-            except Exception as e:
+            except Exception:
                 # If that fails, use stream data
                 channel_info = None
             
@@ -274,21 +274,6 @@ class TwitchDataCollector:
         except Exception as e:
             print(f"Error fetching details for {username}: {e}")
             return None
-    
-    async def get_follows_network(self, streamer_ids: List[str]) -> List[tuple]:
-        """
-        Build network edges based on mutual follows (simplified version)
-        In real implementation, you'd need to check follower overlaps
-        
-        Args:
-            streamer_ids: List of streamer IDs
-        
-        Returns:
-            List of tuples representing edges
-        """
-        edges = []
-        print("Note: Follower network requires additional data sources")
-        return edges
     
     def save_data(self, data: List[Dict], filename: str):
         """Save collected data to JSON file"""

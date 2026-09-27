@@ -30,10 +30,11 @@ class FeatureExtractor:
         game_features = self.mlb_games.fit_transform(games)
         features.append(game_features)
         
-        # Tags (multi-hot encoded)
-        tags = streamers_df['tags'].fillna('').apply(
-            lambda x: x if isinstance(x, list) else []
-        ).tolist()
+        # Tags (multi-hot encoded); streamers loaded from the database have no tags column
+        if 'tags' in streamers_df.columns:
+            tags = streamers_df['tags'].apply(lambda x: x if isinstance(x, list) else []).tolist()
+        else:
+            tags = [[] for _ in range(len(streamers_df))]
         tag_features = self.mlb_tags.fit_transform(tags)
         features.append(tag_features)
         

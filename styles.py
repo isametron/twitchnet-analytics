@@ -51,6 +51,37 @@ section[data-testid="stSidebar"]{background:#0b0710 !important; border-right: 1p
 </style>
 """
 
+# Gradient button theme; rendered after CUSTOM_CSS so it overrides the base button style
+BUTTON_CSS = """
+<style>
+.stButton button {
+    background: linear-gradient(135deg, rgba(0,255,218,0.15), rgba(138,43,226,0.15)) !important;
+    border: 1px solid rgba(0,255,218,0.3) !important;
+    border-radius: 12px !important;
+    color: #e8ecf4 !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    padding: 0.6rem 1.2rem !important;
+    transition: all 0.3s ease !important;
+    text-transform: none !important;
+    white-space: nowrap !important;
+    min-width: auto !important;
+}
+.stButton button:hover {
+    background: linear-gradient(135deg, rgba(0,255,218,0.25), rgba(138,43,226,0.25)) !important;
+    border-color: #00ffda !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(0,255,218,0.3) !important;
+}
+.stButton button[kind="primary"] {
+    background: linear-gradient(135deg, #00ffda, #8a2be2) !important;
+    border-color: #00ffda !important;
+    color: #0a0e1a !important;
+    box-shadow: 0 4px 12px rgba(0,255,218,0.4) !important;
+}
+</style>
+"""
+
 HEADER_HTML = """
 <div class='twitch-like-header'>
 	<div style='display:flex;align-items:center;gap:10px'>

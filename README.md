@@ -98,7 +98,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/twitchnet-analytics.git
+git clone https://github.com/isametron/twitchnet-analytics.git
 cd twitchnet-analytics
 
 # Create virtual environment
@@ -157,7 +157,7 @@ Then open http://localhost:8501 in your browser.
 
 ```
 twitchnet-analytics/
-├── 📄 app.py                 # Streamlit UI entrypoint
+├── 📄 app.py                 # Streamlit UI entrypoint (page router)
 ├── 📄 main.py                # CLI entrypoint
 ├── 📄 config.py              # Configuration settings
 │
@@ -171,9 +171,9 @@ twitchnet-analytics/
 │   └── scoring.py            # Advanced scoring algorithms
 │
 ├── 🎨 UI & Visualization
-│   ├── network_viz.py        # PyVis visualization
+│   ├── ui/                   # One module per Streamlit page
+│   │   └── network_graph.py  # PyVis network builder
 │   ├── advanced_viz.py       # Plotly charts
-│   ├── dashboard.py          # Dashboard metrics
 │   └── styles.py             # Custom CSS theming
 │
 ├── 💾 Data Layer
@@ -185,7 +185,6 @@ twitchnet-analytics/
 │   ├── processed/            # Processed CSV files
 │   └── network_graphs/       # Serialized graphs
 │
-├── 📂 lib/                   # Frontend JS libraries
 └── 📂 scripts/               # Utility scripts
 ```
 
@@ -230,7 +229,7 @@ COLLECT → BUILD → ANALYZE → VISUALIZE
 Twitch API → NetworkX Graph → Centrality + Louvain → PyVis + Plotly
     │              │                  │                    │
     ▼              ▼                  ▼                    ▼
-streamers.json  .gpickle      centrality.csv        network.html
+streamers.json  .gpickle      centrality.csv        in-app graph
                               communities.csv
 ```
 
@@ -244,7 +243,7 @@ streamers.json  .gpickle      centrality.csv        network.html
 | Problem | Solution |
 |---------|----------|
 | Streamlit won't start | Run `python -m py_compile app.py` to check for syntax errors |
-| Blank network visualization | Open `network.html` directly in browser |
+| Blank network visualization | The graph loads vis-network from cdnjs; check that your network allows it |
 | Slow graph rendering | Reduce edge cap in settings or filter to subgraph |
 | Twitch API rate limits | Built-in backoff handles this; wait 10+ min if persistent |
 | Missing CSV files | Run data collection step in the UI first |

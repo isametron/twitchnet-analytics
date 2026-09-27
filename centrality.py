@@ -37,7 +37,7 @@ class CentralityAnalyzer:
                 self.graph, max_iter=1000
             )
             print("  ✓ Eigenvector centrality calculated")
-        except:
+        except Exception:
             print("  ⚠ Eigenvector centrality failed (disconnected graph)")
             self.centrality_scores['eigenvector'] = {node: 0 for node in self.graph.nodes()}
         

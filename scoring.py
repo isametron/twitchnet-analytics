@@ -5,9 +5,8 @@ Provides multiple scoring methods for different recommendation strategies
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from sklearn.preprocessing import MinMaxScaler
-from config import Config
 
 
 class AdvancedScorer:
@@ -30,7 +29,6 @@ class AdvancedScorer:
         Returns:
             Engagement score (0-1)
         """
-        base_score = min(follower_count / 500000, 1.0)  # Normalize to max 500k followers
         partner_bonus = 0.1 if is_partner else 0.0
         
         # Apply logarithmic scaling to avoid extremes

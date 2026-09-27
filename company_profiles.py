@@ -1,5 +1,4 @@
-import pandas as pd
-from typing import Dict, List
+from typing import Dict
 
 class CompanyProfile:
     """Represents a company looking for streamer partnerships"""

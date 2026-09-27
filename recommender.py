@@ -1,10 +1,9 @@
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 from dataclasses import dataclass
 from config import Config
 from similarity_calc import SimilarityCalculator
-from centrality import CentralityAnalyzer
 
 @dataclass
 class CampaignObjectives:
@@ -378,7 +377,7 @@ class StreamerRecommender:
             report += f"   Match Score: {row['composite_score']:.3f}\n"
             report += f"   - Content Similarity: {row['content_similarity']:.3f}\n"
             report += f"   - Network Influence: {row['pagerank_centrality']:.3f}\n"
-            report += f"\n"
+            report += "\n"
         
         return report
 

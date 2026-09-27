@@ -101,7 +101,12 @@ desktop.ini
 # Keep data directory structure but ignore actual data files
 data/raw/*.json
 data/processed/*.csv
+data/processed/*.json
+data/processed/*.db
 data/network_graphs/*.gpickle
+
+# PyVis local assets (the app loads vis-network from a CDN instead)
+lib/
 
 # Machine learning models (large files)
 *.pth
@@ -109,8 +114,3 @@ data/network_graphs/*.gpickle
 *.h5
 *.ckpt
 
-# Unrelated project files
-hand_signs/
-Twitch-Network-Analysis/
-cnn_model.pth
-labels.pkl

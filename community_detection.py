@@ -3,7 +3,7 @@ import community as community_louvain
 import pandas as pd
 import numpy as np
 from collections import defaultdict, Counter
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 import json
 from config import Config
@@ -176,7 +176,7 @@ class CommunityDetector:
         density = nx.density(subgraph)
         try:
             avg_clustering = nx.average_clustering(subgraph)
-        except:
+        except Exception:
             avg_clustering = 0
         
         # Activity metrics (based on partner status as proxy for activity)

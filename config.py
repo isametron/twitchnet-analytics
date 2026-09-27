@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -30,6 +31,13 @@ class Config:
     # Output settings
     TOP_N_RECOMMENDATIONS = 10
     
+    @staticmethod
+    def make_console_safe():
+        """Stop emoji progress prints from crashing when stdout isn't UTF-8 (e.g. redirected on Windows)"""
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, 'reconfigure'):
+                stream.reconfigure(errors='backslashreplace')
+
     @classmethod
     def create_directories(cls):
         """Create necessary directories if they don't exist"""
