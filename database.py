@@ -7,6 +7,69 @@ from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 from config import Config
 
+# Streamer record fields (as produced by TwitchDataCollector) and their SQLite types
+STREAMER_COLUMNS = {
+    'user_id': 'TEXT PRIMARY KEY',
+    'username': 'TEXT NOT NULL',
+    'display_name': 'TEXT',
+    'description': 'TEXT',
+    'game_name': 'TEXT',
+    'game_id': 'TEXT',
+    'follower_count': 'INTEGER',
+    'language': 'TEXT',
+    'tags': 'TEXT',
+    'is_partner': 'BOOLEAN',
+    'broadcaster_type': 'TEXT',
+    'is_live': 'BOOLEAN',
+    'viewer_count': 'INTEGER',
+    'stream_title': 'TEXT',
+    'thumbnail_url': 'TEXT',
+    'started_at': 'TEXT',
+    'is_mature': 'BOOLEAN',
+    'content_classification_labels': 'TEXT',
+    'is_branded_content': 'BOOLEAN',
+    'profile_image_url': 'TEXT',
+    'created_at': 'TEXT',
+}
+STREAMER_JSON_COLUMNS = {'tags', 'content_classification_labels'}
+STREAMER_BOOL_COLUMNS = {'is_partner', 'is_live', 'is_mature', 'is_branded_content'}
+
+# Time-series and relationship tables used by the tracker, relations and metrics modules
+EXTRA_TABLES = [
+    '''CREATE TABLE IF NOT EXISTS stream_snapshots (
+        user_id TEXT, ts TEXT, viewer_count INTEGER, game_id TEXT, game_name TEXT, title TEXT,
+        PRIMARY KEY (user_id, ts))''',
+    '''CREATE TABLE IF NOT EXISTS follower_snapshots (
+        user_id TEXT, ts TEXT, followers INTEGER,
+        PRIMARY KEY (user_id, ts))''',
+    # Chatters are stored as salted hashes: only set overlap between channels is needed
+    '''CREATE TABLE IF NOT EXISTS chat_presence (
+        channel_id TEXT, chatter_hash TEXT, first_seen TEXT, last_seen TEXT, msg_count INTEGER,
+        PRIMARY KEY (channel_id, chatter_hash))''',
+    '''CREATE TABLE IF NOT EXISTS raids (
+        from_id TEXT, to_id TEXT, ts TEXT, viewers INTEGER,
+        PRIMARY KEY (from_id, to_id, ts))''',
+    '''CREATE TABLE IF NOT EXISTS team_members (
+        team_id TEXT, team_name TEXT, user_id TEXT,
+        PRIMARY KEY (team_id, user_id))''',
+    # Undirected: a_id < b_id; source is 'shared_chat' or 'title_mention'
+    '''CREATE TABLE IF NOT EXISTS collabs (
+        a_id TEXT, b_id TEXT, ts TEXT, source TEXT,
+        PRIMARY KEY (a_id, b_id, ts, source))''',
+    '''CREATE TABLE IF NOT EXISTS videos (
+        video_id TEXT PRIMARY KEY, user_id TEXT, created_at TEXT, duration_s INTEGER,
+        view_count INTEGER, title TEXT)''',
+    '''CREATE TABLE IF NOT EXISTS clips (
+        clip_id TEXT PRIMARY KEY, broadcaster_id TEXT, created_at TEXT, view_count INTEGER,
+        game_id TEXT, title TEXT)''',
+    '''CREATE TABLE IF NOT EXISTS top_games (
+        ts TEXT, game_id TEXT, name TEXT, rank INTEGER, viewer_sum INTEGER,
+        PRIMARY KEY (ts, game_id))''',
+    '''CREATE TABLE IF NOT EXISTS tracked_channels (
+        user_id TEXT PRIMARY KEY, login TEXT, added_at TEXT)''',
+]
+
+
 class DatabaseManager:
     """Manage persistent storage for streamer data, graphs, and analytics"""
     
@@ -25,23 +88,11 @@ class DatabaseManager:
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         cursor = self.conn.cursor()
         
-        # Streamers table
-        cursor.execute('''
+        # Streamers table (latest state per streamer; history lives in the snapshot tables)
+        column_defs = ',\n'.join(f"{name} {sql_type}" for name, sql_type in STREAMER_COLUMNS.items())
+        cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS streamers (
-                user_id TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
-                display_name TEXT,
-                game_name TEXT,
-                follower_count INTEGER,
-                view_count INTEGER,
-                language TEXT,
-                is_partner BOOLEAN,
-                is_live BOOLEAN,
-                viewer_count INTEGER,
-                stream_title TEXT,
-                thumbnail_url TEXT,
-                profile_image_url TEXT,
-                created_at TEXT,
+                {column_defs},
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -105,47 +156,72 @@ class DatabaseManager:
                 completed_at TIMESTAMP
             )
         ''')
-        
+
+        for ddl in EXTRA_TABLES:
+            cursor.execute(ddl)
+
         self.conn.commit()
+        self._migrate()
         print(f"Database initialized at {self.db_path}")
+
+    def _migrate(self):
+        """Bring a streamers table created by an older version up to the current columns (idempotent)"""
+        cursor = self.conn.cursor()
+        existing = {row[1] for row in cursor.execute("PRAGMA table_info(streamers)")}
+
+        for name, sql_type in STREAMER_COLUMNS.items():
+            if name not in existing:
+                # ADD COLUMN can't carry PRIMARY KEY / NOT NULL constraints; the plain type is enough
+                cursor.execute(f"ALTER TABLE streamers ADD COLUMN {name} {sql_type.split()[0]}")
+
+        # view_count was deprecated by Twitch (always 0)
+        if 'view_count' in existing:
+            cursor.execute("ALTER TABLE streamers DROP COLUMN view_count")
+
+        self.conn.commit()
+
+    def _insert_rows(self, table: str, rows: List[Dict], conflict: str = 'OR REPLACE') -> int:
+        """Insert dict rows (all with the same keys) into an internal table in one transaction"""
+        if not rows:
+            return 0
+        columns = list(rows[0])
+        placeholders = ', '.join('?' for _ in columns)
+        with self.conn:
+            self.conn.executemany(
+                f"INSERT {conflict} INTO {table} ({', '.join(columns)}) VALUES ({placeholders})",
+                [tuple(row.get(col) for col in columns) for row in rows]
+            )
+        return len(rows)
+
+    def _select_rows(self, table: str, conditions: Dict = None, order_by: str = None) -> List[Dict]:
+        """Select rows from an internal table; condition keys are 'column' or 'column op' (e.g. 'ts >=')"""
+        query = f"SELECT * FROM {table}"
+        clauses, params = [], []
+        for column_op, value in (conditions or {}).items():
+            if value is not None:
+                column, _, op = column_op.partition(' ')
+                clauses.append(f"{column} {op or '='} ?")
+                params.append(value)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        if order_by:
+            query += f" ORDER BY {order_by}"
+
+        cursor = self.conn.execute(query, params)
+        columns = [desc[0] for desc in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
     
     # ==================== STREAMER OPERATIONS ====================
     
     def save_streamers(self, streamers_data: List[Dict]) -> int:
         """Save or update streamer data"""
-        cursor = self.conn.cursor()
-        saved_count = 0
-        
+        rows = []
         for streamer in streamers_data:
-            try:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO streamers 
-                    (user_id, username, display_name, game_name, follower_count, 
-                     view_count, language, is_partner, is_live, viewer_count, 
-                     stream_title, thumbnail_url, profile_image_url, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    streamer.get('user_id'),
-                    streamer.get('username'),
-                    streamer.get('display_name'),
-                    streamer.get('game_name'),
-                    streamer.get('follower_count'),
-                    streamer.get('view_count'),
-                    streamer.get('language'),
-                    streamer.get('is_partner'),
-                    streamer.get('is_live'),
-                    streamer.get('viewer_count'),
-                    streamer.get('stream_title'),
-                    streamer.get('thumbnail_url'),
-                    streamer.get('profile_image_url'),
-                    streamer.get('created_at')
-                ))
-                saved_count += 1
-            except Exception as e:
-                print(f"Error saving streamer {streamer.get('username')}: {e}")
-        
-        self.conn.commit()
-        return saved_count
+            row = {col: streamer.get(col) for col in STREAMER_COLUMNS}
+            for col in STREAMER_JSON_COLUMNS:
+                row[col] = json.dumps(row[col] or [], ensure_ascii=False)
+            rows.append(row)
+        return self._insert_rows('streamers', rows)
     
     def load_streamers(self, filters: Dict = None) -> List[Dict]:
         """Load streamers with optional filters"""
@@ -175,8 +251,12 @@ class DatabaseManager:
         streamers = []
         for row in cursor.fetchall():
             streamer = dict(zip(columns, row))
+            for col in STREAMER_JSON_COLUMNS:
+                streamer[col] = json.loads(streamer[col]) if streamer.get(col) else []
+            for col in STREAMER_BOOL_COLUMNS:
+                streamer[col] = bool(streamer.get(col))
             streamers.append(streamer)
-        
+
         return streamers
     
     def get_streamer_count(self) -> int:
@@ -423,6 +503,106 @@ class DatabaseManager:
             }
         return None
     
+    # ==================== TIME SERIES OPERATIONS ====================
+
+    def save_stream_snapshots(self, snapshots: List[Dict]) -> int:
+        """Save live stream samples: user_id, ts, viewer_count, game_id, game_name, title"""
+        return self._insert_rows('stream_snapshots', snapshots)
+
+    def load_stream_snapshots(self, user_id: str = None, since: str = None) -> List[Dict]:
+        return self._select_rows('stream_snapshots', {'user_id': user_id, 'ts >=': since}, 'user_id, ts')
+
+    def save_follower_snapshots(self, snapshots: List[Dict]) -> int:
+        """Save follower totals over time: user_id, ts, followers"""
+        return self._insert_rows('follower_snapshots', snapshots)
+
+    def load_follower_snapshots(self, user_id: str = None, since: str = None) -> List[Dict]:
+        return self._select_rows('follower_snapshots', {'user_id': user_id, 'ts >=': since}, 'user_id, ts')
+
+    def save_top_games(self, rows: List[Dict]) -> int:
+        """Save a top-categories snapshot: ts, game_id, name, rank, viewer_sum"""
+        return self._insert_rows('top_games', rows)
+
+    def load_top_games(self, since: str = None) -> List[Dict]:
+        return self._select_rows('top_games', {'ts >=': since}, 'ts, rank')
+
+    # ==================== RELATIONSHIP OPERATIONS ====================
+
+    def save_chat_presence(self, rows: List[Dict]) -> int:
+        """
+        Merge chatter sightings: channel_id, chatter_hash, first_seen, last_seen, msg_count.
+        Existing rows keep their first_seen, extend last_seen and add to msg_count.
+        """
+        if not rows:
+            return 0
+        with self.conn:
+            self.conn.executemany('''
+                INSERT INTO chat_presence (channel_id, chatter_hash, first_seen, last_seen, msg_count)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (channel_id, chatter_hash) DO UPDATE SET
+                    last_seen = MAX(last_seen, excluded.last_seen),
+                    msg_count = msg_count + excluded.msg_count
+            ''', [(r['channel_id'], r['chatter_hash'], r['first_seen'], r['last_seen'], r['msg_count'])
+                  for r in rows])
+        return len(rows)
+
+    def load_chat_presence(self, channel_id: str = None) -> List[Dict]:
+        return self._select_rows('chat_presence', {'channel_id': channel_id})
+
+    def save_raids(self, raids: List[Dict]) -> int:
+        """Save raids: from_id, to_id, ts, viewers"""
+        return self._insert_rows('raids', raids, conflict='OR IGNORE')
+
+    def load_raids(self, since: str = None) -> List[Dict]:
+        return self._select_rows('raids', {'ts >=': since}, 'ts')
+
+    def save_team_members(self, members: List[Dict]) -> int:
+        """Save team membership: team_id, team_name, user_id"""
+        return self._insert_rows('team_members', members)
+
+    def load_team_members(self, team_id: str = None) -> List[Dict]:
+        return self._select_rows('team_members', {'team_id': team_id})
+
+    def save_collabs(self, collabs: List[Dict]) -> int:
+        """Save collaborations: a_id, b_id, ts, source (pair order is normalized)"""
+        rows = [dict(c, a_id=min(c['a_id'], c['b_id']), b_id=max(c['a_id'], c['b_id'])) for c in collabs]
+        return self._insert_rows('collabs', rows, conflict='OR IGNORE')
+
+    def load_collabs(self, source: str = None) -> List[Dict]:
+        return self._select_rows('collabs', {'source': source}, 'ts')
+
+    # ==================== CONTENT OPERATIONS ====================
+
+    def save_videos(self, videos: List[Dict]) -> int:
+        """Save past broadcasts: video_id, user_id, created_at, duration_s, view_count, title"""
+        return self._insert_rows('videos', videos)
+
+    def load_videos(self, user_id: str = None) -> List[Dict]:
+        return self._select_rows('videos', {'user_id': user_id}, 'created_at')
+
+    def save_clips(self, clips: List[Dict]) -> int:
+        """Save clips: clip_id, broadcaster_id, created_at, view_count, game_id, title"""
+        return self._insert_rows('clips', clips)
+
+    def load_clips(self, broadcaster_id: str = None) -> List[Dict]:
+        return self._select_rows('clips', {'broadcaster_id': broadcaster_id}, 'created_at')
+
+    # ==================== TRACKER OPERATIONS ====================
+
+    def add_tracked_channels(self, channels: List[Dict]) -> int:
+        """Add channels (user_id, login) for the tracker to follow; existing entries are kept"""
+        now = datetime.now().isoformat()
+        rows = [{'user_id': c['user_id'], 'login': c['login'], 'added_at': c.get('added_at', now)}
+                for c in channels]
+        return self._insert_rows('tracked_channels', rows, conflict='OR IGNORE')
+
+    def load_tracked_channels(self) -> List[Dict]:
+        return self._select_rows('tracked_channels', order_by='added_at')
+
+    def remove_tracked_channels(self, user_ids: List[str]):
+        with self.conn:
+            self.conn.executemany("DELETE FROM tracked_channels WHERE user_id = ?", [(uid,) for uid in user_ids])
+
     # ==================== UTILITY OPERATIONS ====================
     
     def get_stats(self) -> Dict:

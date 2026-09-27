@@ -39,8 +39,8 @@ class FeatureExtractor:
         features.append(tag_features)
         
         # Numerical features (normalized)
-        numerical_cols = ['follower_count', 'view_count']
-        numerical_features = streamers_df[numerical_cols].fillna(0).values
+        numerical_cols = ['follower_count', 'viewer_count']
+        numerical_features = streamers_df.reindex(columns=numerical_cols).fillna(0).values
         numerical_features = self.scaler.fit_transform(numerical_features)
         features.append(numerical_features)
         

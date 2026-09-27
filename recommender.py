@@ -59,14 +59,15 @@ class StreamerRecommender:
             Config.CENTRALITY_WEIGHT
         )
         
-        # Engagement (simplified - based on view count)
+        # Engagement (simplified - live viewers as a share of followers)
         if engagement_score is None:
+            engagement_score = 0.0
             streamer_data = self.streamers_df[self.streamers_df['user_id'] == streamer_id]
-            if not streamer_data.empty:
-                view_count = streamer_data['view_count'].values[0]
+            if not streamer_data.empty and 'viewer_count' in streamer_data:
+                viewer_count = streamer_data['viewer_count'].fillna(0).values[0]
                 follower_count = streamer_data['follower_count'].values[0]
-                engagement_score = view_count / max(follower_count, 1)
-                engagement_score = min(engagement_score / 1000, 1.0)  # Normalize
+                engagement_score = viewer_count / max(follower_count, 1)
+                engagement_score = min(engagement_score / 0.1, 1.0)  # 10% of followers watching live = max
         
         engagement_component = engagement_score * Config.ENGAGEMENT_WEIGHT
         
