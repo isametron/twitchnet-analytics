@@ -63,20 +63,20 @@ def build_network_html(display_graph, color_by, metric_scores, pagerank,
     def get_node_color(node_data, color_mode):
         if color_mode == "Partner Status":
             return "#3b82f6" if node_data.get("is_partner") else "#ef4444"
-        
+
         elif color_mode == "Game":
             games = list(set([d.get("game_name", "Unknown") for _, d in display_graph.nodes(data=True)]))
             # Distinct, vibrant colors for white background
             colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"]
             game_colors = {game: colors[i % len(colors)] for i, game in enumerate(games)}
             return game_colors.get(node_data.get("game_name", "Unknown"), "#6b7280")
-        
+
         elif color_mode == "Language":
             langs = list(set([d.get("language", "en") for _, d in display_graph.nodes(data=True)]))
             colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"]
             lang_colors = {lang: colors[i % len(colors)] for i, lang in enumerate(langs)}
             return lang_colors.get(node_data.get("language", "en"), "#6b7280")
-        
+
         elif color_mode == "Follower Count":
             followers = node_data.get("follower_count", 0)
             if followers > 500000:
@@ -87,10 +87,10 @@ def build_network_html(display_graph, color_by, metric_scores, pagerank,
                 return "#8b5cf6"  # Purple - medium
             else:
                 return "#6b7280"  # Gray - small
-        
+
         elif color_mode == "Live Status":
             return "#10b981" if node_data.get("is_live") else "#6b7280"
-        
+
         elif color_mode == "Account Age":
             created = node_data.get("created_at", "")
             if created:
@@ -108,7 +108,7 @@ def build_network_html(display_graph, color_by, metric_scores, pagerank,
                 except Exception:
                     return "#6b7280"
             return "#6b7280"
-        
+
         return "#3b82f6"  # Default blue
 
     # Precompute layout positions to avoid expensive browser-side physics
@@ -155,7 +155,7 @@ def build_network_html(display_graph, color_by, metric_scores, pagerank,
 
     # Add edges - thin gray lines for cleaner look
     edge_counts = {"same_game": 0, "same_language": 0, "strong_connections": 0, "both_partners": 0, "same_tier": 0}
-    
+
     # Cap edges added to the visualization to keep rendering responsive
     max_edges = 1500
     added_edge_count = 0

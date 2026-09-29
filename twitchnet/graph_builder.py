@@ -1,23 +1,25 @@
+import pickle
+from typing import Dict, List
+
 import networkx as nx
 import pandas as pd
-import pickle
-from typing import List, Dict
-from config import Config
+
+from twitchnet.config import Config
 
 NETWORK_MODES = ('attribute', 'real', 'hybrid')
 HYBRID_ATTRIBUTE_WEIGHT = 0.2  # attribute edges count this much next to observed relationships in hybrid mode
 
 class StreamerNetworkBuilder:
     """Build and manage streamer network graphs"""
-    
+
     def __init__(self):
         self.graph = nx.Graph()
         self.streamer_data = {}
-    
+
     def add_streamers(self, streamers: List[Dict]):
         """
         Add streamers as nodes to the graph
-        
+
         Args:
             streamers: List of streamer data dictionaries
         """
@@ -25,9 +27,9 @@ class StreamerNetworkBuilder:
             user_id = streamer['user_id']
             self.graph.add_node(user_id, **streamer)
             self.streamer_data[user_id] = streamer
-        
+
         print(f"Added {len(streamers)} nodes to network graph")
-    
+
     def _add_or_merge_edge(self, node1, node2, weight: float, edge_type: str, **attrs) -> bool:
         """Add an edge, or add weight and the edge type to an existing one. Returns True if the edge is new."""
         if self.graph.has_edge(node1, node2):
@@ -312,7 +314,7 @@ class StreamerNetworkBuilder:
     def add_edges_from_external_data(self, edge_list: List[tuple]):
         """
         Add edges from external data (e.g., SNAP dataset)
-        
+
         Args:
             edge_list: List of tuples (source, target, weight)
         """
@@ -321,13 +323,13 @@ class StreamerNetworkBuilder:
                 self.graph.add_edge(edge[0], edge[1], weight=1.0)
             else:
                 self.graph.add_edge(edge[0], edge[1], weight=edge[2])
-        
+
         print(f"Added {len(edge_list)} edges from external data")
-    
+
     def load_snap_dataset(self, edges_file: str, features_file: str = None):
         """
         Load SNAP Twitch dataset
-        
+
         Args:
             edges_file: Path to edges CSV file
             features_file: Path to features CSV file (optional)
@@ -337,7 +339,7 @@ class StreamerNetworkBuilder:
             edges_df = pd.read_csv(edges_file)
             edge_list = list(edges_df.itertuples(index=False, name=None))
             self.add_edges_from_external_data(edge_list)
-            
+
             # Load features if provided
             if features_file:
                 features_df = pd.read_csv(features_file)
@@ -346,11 +348,11 @@ class StreamerNetworkBuilder:
                     node_attrs = row.to_dict()
                     if node_id in self.graph:
                         self.graph.nodes[node_id].update(node_attrs)
-            
+
             print("SNAP dataset loaded successfully")
         except Exception as e:
             print(f"Error loading SNAP dataset: {e}")
-    
+
     def get_graph_stats(self) -> Dict:
         """Get basic statistics about the network"""
         stats = {
@@ -359,7 +361,7 @@ class StreamerNetworkBuilder:
             'density': nx.density(self.graph),
             'is_connected': nx.is_connected(self.graph)
         }
-        
+
         if stats['is_connected']:
             stats['diameter'] = nx.diameter(self.graph)
             stats['avg_shortest_path'] = nx.average_shortest_path_length(self.graph)
@@ -367,23 +369,23 @@ class StreamerNetworkBuilder:
             # Get largest connected component
             largest_cc = max(nx.connected_components(self.graph), key=len)
             stats['largest_component_size'] = len(largest_cc)
-        
+
         return stats
-    
+
     def save_graph(self, filename: str = 'streamer_network.gpickle'):
         """Save graph to file"""
         filepath = f"{Config.NETWORK_GRAPHS_DIR}/{filename}"
         with open(filepath, 'wb') as f:
             pickle.dump(self.graph, f, pickle.HIGHEST_PROTOCOL)
         print(f"Graph saved to {filepath}")
-    
+
     def load_graph(self, filename: str = 'streamer_network.gpickle'):
         """Load graph from file"""
         filepath = f"{Config.NETWORK_GRAPHS_DIR}/{filename}"
         with open(filepath, 'rb') as f:
             self.graph = pickle.load(f)
         print(f"Graph loaded from {filepath}")
-    
+
     def export_to_csv(self, nodes_file: str = 'nodes.csv', edges_file: str = 'edges.csv'):
         """Export graph to CSV files"""
         # Export nodes
@@ -392,38 +394,38 @@ class StreamerNetworkBuilder:
             node_dict = {'node_id': node}
             node_dict.update(attrs)
             nodes_data.append(node_dict)
-        
+
         nodes_df = pd.DataFrame(nodes_data)
         nodes_df.to_csv(f"{Config.PROCESSED_DATA_DIR}/{nodes_file}", index=False)
-        
+
         # Export edges
         edges_data = []
         for u, v, attrs in self.graph.edges(data=True):
             edge_dict = {'source': u, 'target': v}
             edge_dict.update(attrs)
             edges_data.append(edge_dict)
-        
+
         edges_df = pd.DataFrame(edges_data)
         edges_df.to_csv(f"{Config.PROCESSED_DATA_DIR}/{edges_file}", index=False)
-        
+
         print("Graph exported to CSV files")
 
 
 if __name__ == "__main__":
     builder = StreamerNetworkBuilder()
-    
+
     # Example: Load streamers from JSON
     import json
     with open(f"{Config.RAW_DATA_DIR}/streamers.json", 'r') as f:
         streamers = json.load(f)
-    
+
     builder.add_streamers(streamers)
     builder.add_edges_from_shared_games()
     builder.add_edges_from_tags()
-    
+
     stats = builder.get_graph_stats()
     print("\nNetwork Statistics:")
     for key, value in stats.items():
         print(f"  {key}: {value}")
-    
+
     builder.save_graph()

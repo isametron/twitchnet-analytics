@@ -1,8 +1,8 @@
 """Graph builder tests: edge merging, relationship edges and network modes."""
 import pytest
 
-from database import DatabaseManager
-from graph_builder import HYBRID_ATTRIBUTE_WEIGHT, StreamerNetworkBuilder
+from twitchnet.database import DatabaseManager
+from twitchnet.graph_builder import HYBRID_ATTRIBUTE_WEIGHT, StreamerNetworkBuilder
 
 
 @pytest.fixture

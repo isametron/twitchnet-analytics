@@ -5,9 +5,9 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from company_profiles import CompanyProfile
-from recommender import StreamerRecommender
-from similarity_calc import FeatureExtractor, SimilarityCalculator
+from twitchnet.company_profiles import CompanyProfile
+from twitchnet.recommender import StreamerRecommender
+from twitchnet.similarity_calc import FeatureExtractor, SimilarityCalculator
 
 
 def render():
@@ -82,7 +82,7 @@ def render():
                     profile.to_feature_vector(),
                     top_n=top_n
                 )
-                
+
                 # Store in session state
                 st.session_state.last_recommendations = recommendations
                 st.session_state.last_company_name = company_name
@@ -116,33 +116,33 @@ def render():
                 f"recommendations_{company_name.replace(' ', '_')}.csv",
                 "text/csv"
             )
-        
+
         # ============ ADVANCED OPTIMIZATION (Always show if recommendations exist) ============
         if st.session_state.last_recommendations is not None:
             st.markdown("---")
             st.markdown("### 🎯 Advanced Campaign Optimization")
-            
+
             recommendations = st.session_state.last_recommendations
             recommender = st.session_state.last_recommender
-            
+
             opt_tab1, opt_tab2, opt_tab3, opt_tab4 = st.tabs([
-                "💰 Budget Allocation", 
-                "📈 Strategy Comparison", 
+                "💰 Budget Allocation",
+                "📈 Strategy Comparison",
                 "🎲 Campaign Simulator",
                 "🔍 Competitor Analysis"
             ])
-            
+
             with opt_tab1:
                 st.markdown("#### Optimal Budget Distribution")
                 st.markdown("Allocate your campaign budget across selected streamers for maximum ROI")
-                
+
                 col1, col2 = st.columns([2, 1])
                 with col1:
                     campaign_budget = st.number_input(
-                        "Total Campaign Budget ($)", 
-                        min_value=1000, 
-                        max_value=1000000, 
-                        value=50000, 
+                        "Total Campaign Budget ($)",
+                        min_value=1000,
+                        max_value=1000000,
+                        value=50000,
                         step=1000
                     )
                 with col2:
@@ -155,9 +155,9 @@ def render():
                             'roi_optimized': '💹 ROI Optimized'
                         }[x]
                     )
-                
+
                 if st.button("Calculate Budget Allocation", type="primary"):
-                    
+
                     # Convert recommendations to format expected by allocate_budget
                     streamers_list = []
                     for _, row in recommendations.iterrows():
@@ -168,13 +168,13 @@ def render():
                             'follower_count': row['follower_count'],
                             'estimated_roi': row['composite_score'] * 0.1
                         })
-                    
+
                     allocations = recommender.allocate_budget(
-                        streamers_list, 
-                        campaign_budget, 
+                        streamers_list,
+                        campaign_budget,
                         allocation_strategy
                     )
-                    
+
                     # Display allocations
                     alloc_data = []
                     for alloc in allocations:
@@ -185,9 +185,9 @@ def render():
                             'Est. Engagement': f"{alloc.estimated_engagement:,.0f}",
                             'ROI Score': f"{alloc.roi_score:.2f}"
                         })
-                    
+
                     alloc_df = pd.DataFrame(alloc_data)
-                    
+
                     # Visualization
                     fig_budget = px.bar(
                         alloc_df,
@@ -204,14 +204,14 @@ def render():
                         xaxis_tickangle=-45
                     )
                     st.plotly_chart(fig_budget, width='stretch')
-                    
+
                     st.dataframe(alloc_df, width='stretch')
-                    
+
                     # Summary metrics
                     col1, col2, col3 = st.columns(3)
                     total_reach = sum(a.estimated_reach for a in allocations)
                     total_engagement = sum(a.estimated_engagement for a in allocations)
-                    
+
                     with col1:
                         st.metric("Total Estimated Reach", f"{total_reach:,}")
                     with col2:
@@ -219,19 +219,19 @@ def render():
                     with col3:
                         avg_roi = np.mean([a.roi_score for a in allocations])
                         st.metric("Average ROI Score", f"{avg_roi:.2f}")
-            
+
             with opt_tab2:
                 st.markdown("#### Strategy Performance Comparison")
                 st.markdown("Compare different allocation strategies to find the optimal approach")
-                
+
                 test_budget = st.number_input(
-                    "Test Budget ($)", 
-                    min_value=5000, 
-                    max_value=500000, 
+                    "Test Budget ($)",
+                    min_value=5000,
+                    max_value=500000,
                     value=25000,
                     key="comparison_budget"
                 )
-                
+
                 if st.button("Run Strategy Comparison", type="primary"):
                     streamers_list = []
                     for _, row in recommendations.iterrows():
@@ -242,12 +242,12 @@ def render():
                             'follower_count': row['follower_count'],
                             'estimated_roi': row['composite_score'] * 0.1
                         })
-                    
+
                     with st.spinner("Running comparisons..."):
                         comparison_df = recommender.compare_strategies(streamers_list, test_budget)
-                    
+
                     st.success("Comparison complete!")
-                    
+
                     # Visualize comparison
                     fig_comparison = px.bar(
                         comparison_df,
@@ -264,18 +264,18 @@ def render():
                         font_color="#e2e8f0"
                     )
                     st.plotly_chart(fig_comparison, width='stretch')
-                    
+
                     # Detailed table
                     st.dataframe(comparison_df, width='stretch')
-                    
+
                     # Winner recommendation
                     best_strategy = comparison_df.loc[comparison_df['expected_roi'].idxmax(), 'strategy']
                     st.info(f"📊 Recommended Strategy: **{best_strategy}** (Highest Expected ROI)")
-            
+
             with opt_tab3:
                 st.markdown("#### Campaign Performance Simulator")
                 st.markdown("Monte Carlo simulation to predict campaign outcomes with confidence intervals")
-                
+
                 num_sims = st.slider("Number of Simulations", 100, 5000, 1000, step=100)
                 sim_budget = st.number_input(
                     "Simulation Budget ($)",
@@ -289,9 +289,9 @@ def render():
                     ['balanced', 'top_heavy', 'roi_optimized'],
                     key="sim_strategy"
                 )
-                
+
                 if st.button("Run Simulation", type="primary"):
-                    
+
                     streamers_list = []
                     for _, row in recommendations.iterrows():
                         streamers_list.append({
@@ -301,17 +301,17 @@ def render():
                             'follower_count': row['follower_count'],
                             'estimated_roi': row['composite_score'] * 0.1
                         })
-                    
+
                     allocations = recommender.allocate_budget(streamers_list[:10], sim_budget, sim_strategy)
-                    
+
                     with st.spinner(f"Running {num_sims} simulations..."):
                         simulation = recommender.simulate_campaign(allocations, num_simulations=num_sims)
-                    
+
                     st.success("Simulation complete!")
-                    
+
                     # Display results
                     col1, col2, col3 = st.columns(3)
-                    
+
                     with col1:
                         st.metric(
                             "Expected Reach",
@@ -330,19 +330,19 @@ def render():
                             f"{simulation['mean_roi']:.2f}",
                             delta="per $1K spent"
                         )
-                    
+
                     # 95% Confidence Intervals
                     st.markdown("**95% Confidence Intervals:**")
                     conf_col1, conf_col2 = st.columns(2)
-                    
+
                     with conf_col1:
                         st.write(f"**Reach Range:** {int(simulation['confidence_95']['reach_lower']):,} - {int(simulation['confidence_95']['reach_upper']):,}")
                     with conf_col2:
                         st.write(f"**ROI Range:** {simulation['confidence_95']['roi_lower']:.2f} - {simulation['confidence_95']['roi_upper']:.2f}")
-                    
+
                     # Distribution visualizations
                     dist_col1, dist_col2 = st.columns(2)
-                    
+
                     with dist_col1:
                         fig_reach_dist = px.histogram(
                             x=simulation['distributions']['total_reach'],
@@ -356,7 +356,7 @@ def render():
                             font_color="#e2e8f0"
                         )
                         st.plotly_chart(fig_reach_dist, width='stretch')
-                    
+
                     with dist_col2:
                         fig_roi_dist = px.histogram(
                             x=simulation['distributions']['total_roi'],
@@ -370,57 +370,57 @@ def render():
                             font_color="#e2e8f0"
                         )
                         st.plotly_chart(fig_roi_dist, width='stretch')
-            
+
             with opt_tab4:
                 st.markdown("#### Competitor Analysis")
                 st.markdown("Analyze competitor partnerships and identify market opportunities")
-                
+
                 st.info("💡 Enter streamer usernames (comma-separated) that your competitors are working with")
-                
+
                 competitor_input = st.text_area(
                     "Competitor Streamers",
                     placeholder="e.g., ninja, pokimane, shroud",
                     height=100
                 )
-                
+
                 if st.button("Analyze Competitors", type="primary") and competitor_input:
                     # Parse input
                     competitor_usernames = [s.strip() for s in competitor_input.split(',')]
-                    
+
                     # Find corresponding user IDs
                     streamers_df = pd.DataFrame(st.session_state.streamers_data)
                     competitor_ids = streamers_df[
                         streamers_df['username'].isin(competitor_usernames)
                     ]['user_id'].tolist()
-                    
+
                     if competitor_ids:
                         with st.spinner("Analyzing competitor strategies..."):
                             analysis = recommender.analyze_competitors(competitor_ids)
-                        
+
                         st.success(f"Analyzed {analysis['num_competitor_streamers']} competitor streamers")
-                        
+
                         # Key metrics
                         col1, col2 = st.columns(2)
-                        
+
                         with col1:
                             st.metric(
                                 "Competitor Avg Followers",
                                 f"{analysis['competitor_avg_followers']:,.0f}"
                             )
-                        
+
                         with col2:
                             st.metric(
                                 "Untapped Games",
                                 len(analysis['untapped_games'])
                             )
-                        
+
                         # Competitor game distribution
                         if analysis['competitor_games']:
                             games_df = pd.DataFrame(
                                 list(analysis['competitor_games'].items()),
                                 columns=['Game', 'Count']
                             ).sort_values('Count', ascending=False)
-                            
+
                             fig_comp_games = px.bar(
                                 games_df,
                                 x='Game',
@@ -436,17 +436,17 @@ def render():
                                 xaxis_tickangle=-45
                             )
                             st.plotly_chart(fig_comp_games, width='stretch')
-                        
+
                         # Gap opportunities
                         st.markdown("#### 🎯 Gap Opportunities")
                         st.markdown("High-value streamers not being utilized by competitors")
-                        
+
                         if analysis['gap_opportunities']:
                             gaps_df = pd.DataFrame(analysis['gap_opportunities'])
                             st.dataframe(gaps_df, width='stretch', height=400)
                         else:
                             st.info("No significant gaps identified")
-                        
+
                         # Untapped games
                         if analysis['untapped_games']:
                             st.markdown("#### 🎮 Untapped Game Categories")

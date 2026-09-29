@@ -12,9 +12,9 @@ import community as community_louvain
 import networkx as nx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import Config  # noqa: E402
-from database import DatabaseManager  # noqa: E402
-from graph_builder import NETWORK_MODES, StreamerNetworkBuilder  # noqa: E402
+from twitchnet.config import Config  # noqa: E402
+from twitchnet.database import DatabaseManager  # noqa: E402
+from twitchnet.graph_builder import NETWORK_MODES, StreamerNetworkBuilder  # noqa: E402
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--mode', choices=NETWORK_MODES, default='attribute')

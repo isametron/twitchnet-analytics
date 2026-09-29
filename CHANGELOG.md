@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQLite WAL mode so the dashboard can read while the tracker writes
 
 ### Changed
+- Core modules moved into the `twitchnet/` package (`from twitchnet.database import DatabaseManager`); the repository root keeps only the entry points `app.py`, `main.py`, `tracker.py` and `auth.py`. Module demos run with `python -m twitchnet.<module>`
+- Data paths and `.env` are resolved from the project root, so scripts work from any working directory
+- Ruff configuration (pyflakes, import order, whitespace) in `pyproject.toml`; imports sorted and trailing whitespace removed across the codebase
 - Twitch collection batches user and channel lookups 100 at a time, fetches follower totals concurrently and removes the fixed sleeps; each run logs its duration and API request count
 - Language-diverse collection queries all languages in parallel and looks up the game once
 - The database stores the full streamer record (description, tags, game id and the new fields), so data loaded from it matches freshly collected data

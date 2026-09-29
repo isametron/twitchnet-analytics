@@ -13,11 +13,16 @@ import asyncio
 import time
 
 from auth import get_user_twitch
-from config import Config
-from database import DatabaseManager
-from relations import (ChatPresenceLogger, RaidListener, extract_title_mentions, fetch_shared_chat,
-                       fetch_teams)
-from twitch_api import TwitchDataCollector, _chunks
+from twitchnet.config import Config
+from twitchnet.database import DatabaseManager
+from twitchnet.relations import (
+    ChatPresenceLogger,
+    RaidListener,
+    extract_title_mentions,
+    fetch_shared_chat,
+    fetch_teams,
+)
+from twitchnet.twitch_api import TwitchDataCollector, _chunks
 
 RELATIONS_POLL_S = 300  # live streams: title mentions and Shared Chat sessions
 TEAMS_REFRESH_S = 24 * 3600

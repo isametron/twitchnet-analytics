@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import twitch_api
-from twitch_api import TwitchDataCollector
+from twitchnet import twitch_api
+from twitchnet.twitch_api import TwitchDataCollector
 
 LANGUAGES = twitch_api.DIVERSE_LANGUAGES
 

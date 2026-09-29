@@ -13,7 +13,7 @@ from twitchAPI.oauth import UserAuthenticationStorageHelper, UserAuthenticator
 from twitchAPI.twitch import Twitch
 from twitchAPI.type import AuthScope
 
-from config import Config
+from twitchnet.config import Config
 
 USER_TOKEN_PATH = PurePath(Config.PROCESSED_DATA_DIR) / 'user_token.json'
 # channel.raid, stream.online and stream.offline need no scopes, only a user token

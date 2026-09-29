@@ -6,7 +6,6 @@ import plotly.express as px
 import streamlit as st
 
 
-
 def render():
     st.markdown("<h2>Network Analytics Dashboard</h2>", unsafe_allow_html=True)
     st.markdown("<p style='color: #9ca3af; margin-bottom: 1.5rem;'>Comprehensive insights into network structure and streamer performance</p>", unsafe_allow_html=True)
@@ -16,7 +15,7 @@ def render():
     else:
         try:
             df = pd.DataFrame(st.session_state.streamers_data)
-            
+
             # Analytics tabs
             tab1, tab2, tab3, tab4, tab5 = st.tabs([
                 "📊 Overview", "🎮 Game Analytics", "👥 Demographics",
@@ -26,23 +25,23 @@ def render():
             # ========== TAB 1: OVERVIEW ==========
             with tab1:
                 col1, col2, col3, col4 = st.columns(4)
-                
+
                 with col1:
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                     st.metric("Total Streamers", len(df))
                     st.markdown('</div>', unsafe_allow_html=True)
-                
+
                 with col2:
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                     st.metric("Avg Followers", f"{df['follower_count'].mean():,.0f}")
                     st.markdown('</div>', unsafe_allow_html=True)
-                
+
                 with col3:
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                     partner_pct = (df['is_partner'].sum() / len(df) * 100)
                     st.metric("Partner %", f"{partner_pct:.1f}%")
                     st.markdown('</div>', unsafe_allow_html=True)
-                
+
                 with col4:
                     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                     unique_games = df['game_name'].nunique()
@@ -54,7 +53,7 @@ def render():
                 # Follower distribution
                 st.subheader("Follower Distribution Analysis")
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
                     fig_followers = px.histogram(
                         df,
@@ -72,7 +71,7 @@ def render():
                         yaxis_title="Count"
                     )
                     st.plotly_chart(fig_followers, width='stretch')
-                
+
                 with col2:
                     fig_box = px.box(
                         df,
@@ -90,12 +89,12 @@ def render():
             # ========== TAB 2: GAME ANALYTICS ==========
             with tab2:
                 st.subheader("Game Category Analysis")
-                
+
                 game_counts = df['game_name'].value_counts()
                 game_avg_followers = df.groupby('game_name')['follower_count'].mean().sort_values(ascending=False)
-                
+
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
                     fig_games = px.bar(
                         x=game_counts.index[:15],
@@ -111,7 +110,7 @@ def render():
                         font_color="#e2e8f0"
                     )
                     st.plotly_chart(fig_games, width='stretch')
-                
+
                 with col2:
                     fig_followers_by_game = px.bar(
                         x=game_avg_followers.index[:15],
@@ -131,9 +130,9 @@ def render():
             # ========== TAB 3: DEMOGRAPHICS ==========
             with tab3:
                 st.subheader("Streamer Demographics")
-                
+
                 col1, col2, col3 = st.columns(3)
-                
+
                 with col1:
                     partner_counts = df['is_partner'].value_counts()
                     fig_partner = px.pie(
@@ -148,7 +147,7 @@ def render():
                         font_color="#e2e8f0"
                     )
                     st.plotly_chart(fig_partner, width='stretch')
-                
+
                 with col2:
                     lang_counts = df['language'].value_counts().head(10)
                     fig_lang = px.bar(
@@ -165,7 +164,7 @@ def render():
                         font_color="#e2e8f0"
                     )
                     st.plotly_chart(fig_lang, width='stretch')
-                
+
                 with col3:
                     # Replacement visuals: follower distribution, engagement boxplot, account age
                     # Follower distribution (log scale)
@@ -227,16 +226,16 @@ def render():
             # ========== TAB 4: TOP PERFORMERS ==========
             with tab4:
                 st.subheader("Top Streamers")
-                
+
                 n = st.slider("Show top N streamers", 5, 50, 10, step=5)
-                
+
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
                     top_followers = df.nlargest(n, 'follower_count')[
                         ['display_name', 'follower_count', 'game_name', 'is_partner']
                     ].reset_index(drop=True)
-                    
+
                     fig_top = px.bar(
                         top_followers,
                         x='display_name',
@@ -253,7 +252,7 @@ def render():
                         xaxis_tickangle=-45
                     )
                     st.plotly_chart(fig_top, width='stretch')
-                
+
                 with col2:
                     st.markdown("**Top Performers Table:**")
                     st.dataframe(top_followers, width='stretch')
@@ -262,16 +261,16 @@ def render():
             with tab5:
                 if st.session_state.graph and st.session_state.centrality_scores:
                     st.subheader("Network Centrality Analysis")
-                    
+
                     col1, col2 = st.columns(2)
-                    
+
                     with col1:
                         pagerank = st.session_state.centrality_scores.get("pagerank", {})
                         centrality_data = pd.DataFrame({
                             'Streamer': list(pagerank.keys())[:15],
                             'PageRank Score': list(pagerank.values())[:15]
                         }).sort_values('PageRank Score', ascending=False)
-                        
+
                         fig_pagerank = px.bar(
                             centrality_data,
                             x='Streamer',
@@ -287,14 +286,14 @@ def render():
                             xaxis_tickangle=-45
                         )
                         st.plotly_chart(fig_pagerank, width='stretch')
-                    
+
                     with col2:
                         degree = st.session_state.centrality_scores.get("degree", {})
                         degree_data = pd.DataFrame({
                             'Streamer': list(degree.keys())[:15],
                             'Degree': list(degree.values())[:15]
                         }).sort_values('Degree', ascending=False)
-                        
+
                         fig_degree = px.bar(
                             degree_data,
                             x='Streamer',
@@ -315,7 +314,7 @@ def render():
                     st.subheader("Centrality Metrics Comparison")
                     pagerank = st.session_state.centrality_scores.get("pagerank", {})
                     betweenness = st.session_state.centrality_scores.get("betweenness", {})
-                    
+
                     comparison_data = []
                     for node in list(pagerank.keys())[:50]:
                         comparison_data.append({
@@ -324,7 +323,7 @@ def render():
                             'Betweenness': betweenness.get(node, 0),
                             'Game': st.session_state.graph.nodes[node].get('game_name', 'Unknown')
                         })
-                    
+
                     comp_df = pd.DataFrame(comparison_data)
                     fig_comp = px.scatter(
                         comp_df,

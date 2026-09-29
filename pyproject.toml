@@ -65,6 +65,20 @@ Documentation = "https://github.com/isametron/twitchnet-analytics#readme"
 Repository = "https://github.com/isametron/twitchnet-analytics"
 Issues = "https://github.com/isametron/twitchnet-analytics/issues"
 
+[tool.setuptools.packages.find]
+include = ["twitchnet*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+# Pyflakes, bare except, import order, trailing whitespace
+select = ["F", "E722", "I", "W291", "W293"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["twitchnet", "ui"]
+
 [tool.black]
 line-length = 100
 target-version = ['py39', 'py310', 'py311', 'py312']

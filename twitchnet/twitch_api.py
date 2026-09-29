@@ -1,10 +1,12 @@
-from twitchAPI.twitch import Twitch
 import asyncio
 import json
 import math
 import time
 from typing import Dict, List, Optional
-from config import Config
+
+from twitchAPI.twitch import Twitch
+
+from twitchnet.config import Config
 
 HELIX_BATCH_SIZE = 100  # Helix accepts up to 100 ids per users/channels/streams request
 FOLLOWER_CONCURRENCY = 8  # follower totals need one request per channel

@@ -4,7 +4,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from config import Config
+from twitchnet.config import Config
 
 
 def render():
@@ -48,21 +48,21 @@ This dashboard uses Social Network Analysis to match companies with niche Twitch
 - Hybrid content + network based recommendation engine
 - Interactive visualization and exports
 """)
-    
+
     st.markdown("---")
     st.subheader("📦 Data Management")
-    
+
     man_col1, man_col2, man_col3 = st.columns(3)
-    
+
     with man_col1:
         st.markdown("**💾 Save Current State**")
         if st.button("Save Everything", width='stretch', type="primary"):
             saved_items = []
-            
+
             if st.session_state.streamers_data:
                 count = st.session_state.db.save_streamers(st.session_state.streamers_data)
                 saved_items.append(f"{count} streamers")
-            
+
             if st.session_state.graph:
                 graph_id = st.session_state.db.save_graph(
                     st.session_state.graph,
@@ -71,64 +71,64 @@ This dashboard uses Social Network Analysis to match companies with niche Twitch
                 )
                 st.session_state.current_graph_id = graph_id
                 saved_items.append("graph")
-                
+
                 if st.session_state.centrality_scores:
                     st.session_state.db.save_centrality_scores(
                         st.session_state.centrality_scores, graph_id
                     )
                     saved_items.append("centrality")
-                
+
                 if st.session_state.communities:
                     st.session_state.db.save_communities(
                         st.session_state.communities, graph_id
                     )
                     saved_items.append("communities")
-            
+
             if saved_items:
                 st.success(f"✅ Saved: {', '.join(saved_items)}")
             else:
                 st.warning("Nothing to save yet!")
-    
+
     with man_col2:
         st.markdown("**📂 Load Saved State**")
         saved_graphs = st.session_state.db.list_graphs()
-        
+
         if saved_graphs:
             graph_options = {
                 f"Graph #{g['graph_id']} ({g['node_count']} nodes) - {g['created_at'][:10]}": g['graph_id']
                 for g in saved_graphs
             }
-            
+
             selected = st.selectbox("Select graph to load", list(graph_options.keys()))
-            
+
             if st.button("Load Selected", width='stretch'):
                 graph_id = graph_options[selected]
-                
+
                 # Load streamers
                 streamers = st.session_state.db.load_streamers()
                 st.session_state.streamers_data = streamers
-                
+
                 # Load graph
                 graph, _ = st.session_state.db.load_graph(graph_id=graph_id)
                 st.session_state.graph = graph
                 st.session_state.current_graph_id = graph_id
-                
+
                 # Load associated data
                 st.session_state.centrality_scores = st.session_state.db.load_centrality_scores(graph_id)
                 st.session_state.communities = st.session_state.db.load_communities(graph_id)
-                
+
                 st.success(f"✅ Loaded graph #{graph_id}")
                 st.rerun()
         else:
             st.info("No saved graphs yet")
-    
+
     with man_col3:
         st.markdown("**📤 Export/Import**")
-        
+
         if st.button("Export to JSON", width='stretch'):
             export_file = f"{Config.PROCESSED_DATA_DIR}/export_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.json"
             st.session_state.db.export_to_json(export_file)
-            
+
             with open(export_file, 'r') as f:
                 st.download_button(
                     "Download Export",
@@ -137,7 +137,7 @@ This dashboard uses Social Network Analysis to match companies with niche Twitch
                     mime="application/json",
                     width='stretch'
                 )
-        
+
         st.markdown("**🗑️ Cache Management**")
         if st.button("Clear Expired Cache", width='stretch'):
             deleted = st.session_state.db.clear_expired_cache()

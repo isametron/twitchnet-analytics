@@ -24,16 +24,17 @@
 <td width="50%">
 
 ### 📊 Data Collection
-- Twitch API integration with rate limiting
-- Exponential backoff on API errors
+- Batched Twitch API requests (100 streamers in seconds)
 - Multi-language streamer discovery
 - Follower count, game, tags, partner status
+- Twitch content labels and branded-content flag
+- Relationship tracking: chat audience overlap, raids, teams, co-streams
 
 </td>
 <td width="50%">
 
 ### 🕸️ Network Analysis
-- Multi-reason edge connections
+- Attribute, observed-relationship and hybrid networks
 - Precomputed server-side layout
 - Edge capping for performance
 - 8+ centrality metrics
@@ -151,6 +152,13 @@ python scripts/test_build.py --mode attribute
 python scripts/test_build.py --mode real
 ```
 
+### Tests
+
+```bash
+python -m pytest        # no network access or credentials needed
+python -m ruff check .  # lint
+```
+
 `main.py --mode real|hybrid` builds the network from this data. `hybrid` keeps attribute edges as weak background ties.
 
 **Privacy:** the chat logger never stores message text. Chatters are stored only as salted SHA-256 hashes of their user id, with the salt kept locally in `data/processed/chat_salt.json`, to measure audience overlap between channels.
@@ -160,26 +168,24 @@ python scripts/test_build.py --mode real
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         STREAMLIT UI (app.py)                       │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐│
-│  │   Network    │ │  Analytics   │ │  Dashboard   │ │   Data      ││
-│  │   Analysis   │ │   Charts     │ │   Metrics    │ │ Collection  ││
-│  └──────────────┘ └──────────────┘ └──────────────┘ └─────────────┘│
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-         ┌────────────────────────┼────────────────────────┐
-         ▼                        ▼                        ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────┐
-│  twitch_api.py  │    │ graph_builder.py│    │   recommender.py    │
-│  Data Collector │    │ Network Builder │    │ Recommendation      │
-└─────────────────┘    └─────────────────┘    └─────────────────────┘
-         │                        │                        │
-         ▼                        ▼                        ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────┐
-│  centrality.py  │    │community_detect │    │    scoring.py       │
-│  Network Metrics│    │ Louvain Algo    │    │ Advanced Scoring    │
-└─────────────────┘    └─────────────────┘    └─────────────────────┘
+  Streamlit UI (app.py → ui/)      CLI (main.py)             tracker.py (long-running)
+              │                          │                              │
+              └────────────┬─────────────┘                              │
+                           ▼                                            ▼
+            twitchnet.twitch_api                          twitchnet.relations
+            live streamers, users, channels,              chat audience overlap, raids,
+            followers (batched Helix calls)               teams, co-streams
+                           │                                            │
+                           └──────────────┐          ┌──────────────────┘
+                                          ▼          ▼
+                                 twitchnet.database (SQLite)
+                                              │
+                                              ▼
+                     twitchnet.graph_builder  (attribute | real | hybrid)
+                                              │
+                   ┌──────────────────────────┴──────────────────────────┐
+                   ▼                                                     ▼
+     centrality · community_detection                 similarity_calc · recommender · scoring
 ```
 
 ---
@@ -188,38 +194,36 @@ python scripts/test_build.py --mode real
 
 ```
 twitchnet-analytics/
-├── 📄 app.py                 # Streamlit UI entrypoint (page router)
-├── 📄 main.py                # CLI entrypoint
-├── 📄 tracker.py             # Long-running relationship tracker
-├── 📄 auth.py                # Twitch user sign-in (OAuth)
-├── 📄 config.py              # Configuration settings
+├── 📄 app.py                   # Streamlit UI entrypoint (page router)
+├── 📄 main.py                  # CLI pipeline: collect → network → recommend
+├── 📄 tracker.py               # Long-running relationship tracker
+├── 📄 auth.py                  # One-time Twitch user sign-in (OAuth)
 │
-├── 🔌 Core Modules
-│   ├── twitch_api.py         # Twitch API data collector
-│   ├── graph_builder.py      # Network graph construction
-│   ├── relations.py          # Chat overlap, raids, teams, collabs
-│   ├── centrality.py         # Centrality calculations
-│   ├── community_detection.py# Louvain community detection
-│   ├── similarity_calc.py    # Feature extraction & similarity
-│   ├── recommender.py        # Recommendation engine
-│   └── scoring.py            # Advanced scoring algorithms
+├── 📦 twitchnet/               # Core library
+│   ├── config.py               # Settings, paths and credentials
+│   ├── twitch_api.py           # Twitch API data collector
+│   ├── relations.py            # Chat overlap, raids, teams, collabs
+│   ├── database.py             # SQLite persistence and migrations
+│   ├── graph_builder.py        # Network construction (attribute/real/hybrid)
+│   ├── centrality.py           # Centrality calculations
+│   ├── community_detection.py  # Louvain community detection
+│   ├── similarity_calc.py      # Feature extraction & similarity
+│   ├── recommender.py          # Recommendation engine
+│   ├── scoring.py              # Advanced scoring algorithms
+│   ├── company_profiles.py     # Company profile management
+│   ├── advanced_viz.py         # Plotly charts
+│   └── styles.py               # Custom CSS theming
 │
-├── 🎨 UI & Visualization
-│   ├── ui/                   # One module per Streamlit page
-│   │   └── network_graph.py  # PyVis network builder
-│   ├── advanced_viz.py       # Plotly charts
-│   └── styles.py             # Custom CSS theming
+├── 🎨 ui/                      # One module per Streamlit page
+│   └── network_graph.py        # PyVis network builder
 │
-├── 💾 Data Layer
-│   ├── database.py           # SQLite persistence
-│   └── company_profiles.py   # Company profile management
+├── 🧪 tests/                   # pytest suite (no network access needed)
+├── 🔧 scripts/                 # Utility scripts (network stats by mode)
 │
-├── 📂 data/
-│   ├── raw/                  # Raw API responses
-│   ├── processed/            # Processed CSV files
-│   └── network_graphs/       # Serialized graphs
-│
-└── 📂 scripts/               # Utility scripts
+└── 📂 data/                    # Local data (contents gitignored)
+    ├── raw/                    # Raw API responses
+    ├── processed/              # SQLite database, CSV exports, tokens
+    └── network_graphs/         # Serialized graphs
 ```
 
 ---
@@ -242,7 +246,7 @@ twitchnet-analytics/
 
 ## ⚙️ Configuration
 
-Edit `config.py` to customize:
+Edit `twitchnet/config.py` to customize:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|

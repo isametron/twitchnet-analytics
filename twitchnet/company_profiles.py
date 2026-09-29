@@ -1,8 +1,9 @@
 from typing import Dict
 
+
 class CompanyProfile:
     """Represents a company looking for streamer partnerships"""
-    
+
     def __init__(self, company_id: str, name: str, **kwargs):
         self.company_id = company_id
         self.name = name
@@ -14,7 +15,7 @@ class CompanyProfile:
         self.target_demographics = kwargs.get('target_demographics', {})
         self.brand_values = kwargs.get('brand_values', [])
         self.product_category = kwargs.get('product_category', '')
-    
+
     def to_feature_vector(self) -> Dict:
         """Convert company profile to feature dictionary for matching"""
         return {
@@ -24,28 +25,28 @@ class CompanyProfile:
             'budget_tier': self.budget_tier,
             'product_category': self.product_category
         }
-    
+
     def __repr__(self):
         return f"CompanyProfile(id={self.company_id}, name={self.name})"
 
 
 class CompanyProfileManager:
     """Manage company profiles for matching"""
-    
+
     def __init__(self):
         self.profiles = {}
-    
+
     def add_profile(self, profile: CompanyProfile):
         """Add a company profile"""
         self.profiles[profile.company_id] = profile
-    
+
     def get_profile(self, company_id: str) -> CompanyProfile:
         """Get a specific company profile"""
         return self.profiles.get(company_id)
-    
+
     def create_sample_profiles(self):
         """Create sample company profiles for testing"""
-        
+
         # Gaming peripheral company
         gaming_tech = CompanyProfile(
             company_id='comp_001',
@@ -58,7 +59,7 @@ class CompanyProfileManager:
             product_category='gaming_peripherals',
             brand_values=['competitive', 'performance', 'esports']
         )
-        
+
         # Energy drink brand
         energy_drink = CompanyProfile(
             company_id='comp_002',
@@ -71,7 +72,7 @@ class CompanyProfileManager:
             product_category='food_beverage',
             brand_values=['energy', 'gaming', 'lifestyle']
         )
-        
+
         # Indie game studio
         indie_studio = CompanyProfile(
             company_id='comp_003',
@@ -84,11 +85,11 @@ class CompanyProfileManager:
             product_category='game_developer',
             brand_values=['indie', 'creative', 'community']
         )
-        
+
         self.add_profile(gaming_tech)
         self.add_profile(energy_drink)
         self.add_profile(indie_studio)
-        
+
         print(f"Created {len(self.profiles)} sample company profiles")
         return self.profiles
 
@@ -96,7 +97,7 @@ class CompanyProfileManager:
 if __name__ == "__main__":
     manager = CompanyProfileManager()
     profiles = manager.create_sample_profiles()
-    
+
     for profile in profiles.values():
         print(profile)
         print(f"  Target games: {profile.target_games}")

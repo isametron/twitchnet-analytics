@@ -3,7 +3,7 @@ import sqlite3
 
 import pytest
 
-from database import STREAMER_COLUMNS, DatabaseManager
+from twitchnet.database import STREAMER_COLUMNS, DatabaseManager
 
 
 @pytest.fixture

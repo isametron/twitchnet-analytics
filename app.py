@@ -1,8 +1,8 @@
 import streamlit as st
 
-from config import Config
-from database import DatabaseManager
-from styles import BUTTON_CSS, CUSTOM_CSS, HEADER_HTML
+from twitchnet.config import Config
+from twitchnet.database import DatabaseManager
+from twitchnet.styles import BUTTON_CSS, CUSTOM_CSS, HEADER_HTML
 from ui import analytics, data_collection, home, network_analysis, recommendations
 
 Config.make_console_safe()

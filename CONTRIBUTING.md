@@ -80,11 +80,22 @@ streamlit run app.py
 
 ```bash
 # Run the test suite
-python -m pytest tests/
+python -m pytest
 
 # Run with coverage
-python -m pytest --cov=. tests/
+python -m pytest --cov=twitchnet
+
+# Lint (pyflakes, import order, whitespace; configured in pyproject.toml)
+python -m ruff check .
 ```
+
+### Project Layout
+
+- `twitchnet/` - core library (data collection, storage, network analysis, recommendations)
+- `ui/` - Streamlit pages, routed by `app.py`
+- `app.py`, `main.py`, `tracker.py`, `auth.py` - entry points
+- `tests/` - pytest suite (no network access needed)
+- `scripts/` - utility scripts
 
 ## Pull Request Process
 
@@ -116,6 +127,7 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 - Use **type hints** for function parameters and returns
 - Write **docstrings** for all public functions and classes
 - Maximum line length: **100 characters**
+- Import from the package: `from twitchnet.database import DatabaseManager`
 - Use **meaningful variable names**
 
 ```python
@@ -123,11 +135,11 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 def calculate_centrality_score(graph: nx.Graph, node_id: str) -> float:
     """
     Calculate the centrality score for a given node.
-    
+
     Args:
         graph: The NetworkX graph object
         node_id: The unique identifier of the node
-        
+
     Returns:
         The calculated centrality score between 0 and 1
     """

@@ -5,10 +5,18 @@ from types import SimpleNamespace
 
 import pytest
 
-import relations
-from database import DatabaseManager
-from relations import (ChatPresenceLogger, RaidListener, extract_title_mentions, fetch_shared_chat,
-                       fetch_teams, hash_chatter, load_chat_salt, parse_irc_line)
+from twitchnet import relations
+from twitchnet.database import DatabaseManager
+from twitchnet.relations import (
+    ChatPresenceLogger,
+    RaidListener,
+    extract_title_mentions,
+    fetch_shared_chat,
+    fetch_teams,
+    hash_chatter,
+    load_chat_salt,
+    parse_irc_line,
+)
 
 PRIVMSG = ('@badge-info=;color=#FF0000;display-name=Viewer;room-id=111;tmi-sent-ts=1;user-id=999 '
            ':viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #somechannel :hello @there :)')

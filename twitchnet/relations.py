@@ -25,7 +25,7 @@ import aiohttp
 from twitchAPI.eventsub.websocket import EventSubWebsocket
 from twitchAPI.type import TwitchResourceNotFound
 
-from config import Config
+from twitchnet.config import Config
 
 IRC_URL = 'wss://irc-ws.chat.twitch.tv:443'
 IRC_JOINS_PER_WINDOW = 20  # anonymous connections may JOIN 20 channels per 10 seconds
