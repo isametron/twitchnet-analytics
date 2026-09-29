@@ -124,6 +124,37 @@ streamlit run app.py
 
 Then open http://localhost:8501 in your browser.
 
+### Relationship tracking
+
+By default the network links streamers who share attributes (game, language, tags, partner status, follower tier). `tracker.py` collects **observed** relationships instead:
+
+| Signal | Source | Needs |
+|--------|--------|-------|
+| Chat audience overlap | Anonymous Twitch chat (IRC) | Nothing |
+| Raids | EventSub WebSocket | Twitch sign-in (one time) |
+| Teams | Helix `teams` endpoints | App credentials |
+| Co-streams | Shared Chat sessions + `@mentions` in stream titles | App credentials |
+
+```bash
+# 1. Choose channels to track: the top 100 live right now
+python tracker.py --seed --live
+
+# 2. One-time Twitch sign-in for raids (opens your browser)
+#    Requires http://localhost:17563 as an OAuth Redirect URL on your Twitch application
+python auth.py
+
+# 3. Run the tracker (Ctrl+C to stop; --no-raids skips the sign-in)
+python tracker.py
+
+# Compare network structure with and without the observed relationships
+python scripts/test_build.py --mode attribute
+python scripts/test_build.py --mode real
+```
+
+`main.py --mode real|hybrid` builds the network from this data. `hybrid` keeps attribute edges as weak background ties.
+
+**Privacy:** the chat logger never stores message text. Chatters are stored only as salted SHA-256 hashes of their user id, with the salt kept locally in `data/processed/chat_salt.json`, to measure audience overlap between channels.
+
 ---
 
 ## 🏗️ Architecture
@@ -159,11 +190,14 @@ Then open http://localhost:8501 in your browser.
 twitchnet-analytics/
 ├── 📄 app.py                 # Streamlit UI entrypoint (page router)
 ├── 📄 main.py                # CLI entrypoint
+├── 📄 tracker.py             # Long-running relationship tracker
+├── 📄 auth.py                # Twitch user sign-in (OAuth)
 ├── 📄 config.py              # Configuration settings
 │
 ├── 🔌 Core Modules
 │   ├── twitch_api.py         # Twitch API data collector
 │   ├── graph_builder.py      # Network graph construction
+│   ├── relations.py          # Chat overlap, raids, teams, collabs
 │   ├── centrality.py         # Centrality calculations
 │   ├── community_detection.py# Louvain community detection
 │   ├── similarity_calc.py    # Feature extraction & similarity

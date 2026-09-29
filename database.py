@@ -71,6 +71,8 @@ EXTRA_TABLES = [
         PRIMARY KEY (ts, game_id))''',
     '''CREATE TABLE IF NOT EXISTS tracked_channels (
         user_id TEXT PRIMARY KEY, login TEXT, added_at TEXT)''',
+    # Chat overlap self-joins chat_presence on chatter_hash
+    'CREATE INDEX IF NOT EXISTS idx_chat_presence_chatter ON chat_presence (chatter_hash)',
 ]
 
 
@@ -90,6 +92,8 @@ class DatabaseManager:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        # WAL lets the dashboard read while tracker.py writes
+        self.conn.execute("PRAGMA journal_mode=WAL")
         cursor = self.conn.cursor()
         
         # Streamers table (latest state per streamer; history lives in the snapshot tables)

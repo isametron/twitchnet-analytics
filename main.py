@@ -1,10 +1,12 @@
+import argparse
 import asyncio
 import pandas as pd
 import json
 from config import Config
 from twitch_api import TwitchDataCollector
 from company_profiles import CompanyProfileManager
-from graph_builder import StreamerNetworkBuilder
+from database import DatabaseManager
+from graph_builder import NETWORK_MODES, StreamerNetworkBuilder
 from centrality import CentralityAnalyzer
 from community_detection import CommunityDetector
 from similarity_calc import FeatureExtractor, SimilarityCalculator
@@ -33,21 +35,25 @@ async def collect_data():
     
     return all_streamers
 
-def build_network(streamers):
+def build_network(streamers, mode='attribute'):
     """Step 2: Build network graph"""
     print("\n" + "="*70)
     print("STEP 2: BUILDING NETWORK GRAPH")
     print("="*70)
-    
+
     builder = StreamerNetworkBuilder()
     builder.add_streamers(streamers)
-    
-    # Add all connection types
-    builder.add_edges_from_shared_games()
-    builder.add_edges_from_tags(similarity_threshold=0.2)
-    builder.add_edges_from_language(same_language_weight=0.5)
-    builder.add_edges_from_partner_status(partner_weight=0.8)
-    builder.add_edges_from_viewer_tier(tier_threshold=50000)
+
+    if mode == 'attribute':
+        # Add all attribute connection types
+        builder.add_edges_from_shared_games()
+        builder.add_edges_from_tags(similarity_threshold=0.2)
+        builder.add_edges_from_language(same_language_weight=0.5)
+        builder.add_edges_from_partner_status(partner_weight=0.8)
+        builder.add_edges_from_viewer_tier(tier_threshold=50000)
+    else:
+        # Relationship data comes from tracker.py
+        builder.build_comprehensive_network(mode=mode, db=DatabaseManager())
     
     stats = builder.get_graph_stats()
     print("\nNetwork Statistics:")
@@ -146,7 +152,7 @@ def generate_recommendations(streamers, centrality_scores):
     
     return all_recommendations
 
-async def main():
+async def main(mode='attribute'):
     """Main execution pipeline"""
     print("\n" + "="*70)
     print("TWITCH STREAMER - COMPANY MATCHING SYSTEM")
@@ -168,7 +174,7 @@ async def main():
         streamers = await collect_data()
     
     # Build network
-    builder = build_network(streamers)
+    builder = build_network(streamers, mode)
     
     # Analyze network
     analyzer, detector = analyze_network(builder)
@@ -185,4 +191,7 @@ async def main():
     print("- recommendations_*.csv")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Run the full collect -> network -> recommend pipeline")
+    parser.add_argument('--mode', choices=NETWORK_MODES, default='attribute',
+                        help="network edges: shared attributes, observed relationships (real), or both (hybrid)")
+    asyncio.run(main(parser.parse_args().mode))

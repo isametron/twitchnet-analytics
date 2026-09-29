@@ -33,10 +33,13 @@ class Config:
     
     @staticmethod
     def make_console_safe():
-        """Stop emoji progress prints from crashing when stdout isn't UTF-8 (e.g. redirected on Windows)"""
+        """
+        Stop emoji progress prints from crashing when stdout isn't UTF-8 (e.g. redirected on Windows),
+        and flush output line by line so long-running processes like tracker.py show up in log files.
+        """
         for stream in (sys.stdout, sys.stderr):
             if hasattr(stream, 'reconfigure'):
-                stream.reconfigure(errors='backslashreplace')
+                stream.reconfigure(errors='backslashreplace', line_buffering=True)
 
     @classmethod
     def create_directories(cls):

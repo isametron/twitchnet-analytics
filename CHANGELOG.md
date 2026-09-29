@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Database tables for stream/follower snapshots, chat presence, raids, teams, collabs, videos, clips, top games and tracked channels
 - Automatic migration of existing databases to the new streamer schema
 - pytest suite for the collector (against a fake Twitch client) and the database
+- `tracker.py`: long-running collection of observed relationships between tracked channels (`--seed`, `--seed --live`, `--minutes`, `--no-chat`, `--no-raids`)
+- `relations.py`: anonymous chat audience overlap logger (hashed chatter ids, no message text), EventSub raid listener, team membership, Shared Chat co-streams and `@mention` collabs
+- `auth.py`: one-time Twitch sign-in with a stored, auto-refreshed user token (callback server bound to 127.0.0.1)
+- Network modes: `attribute` (previous behaviour), `real` (chat overlap, raids, teams and collabs only) and `hybrid`; available through `build_comprehensive_network(mode=..., db=...)`, `main.py --mode` and `scripts/test_build.py --mode`
+- SQLite WAL mode so the dashboard can read while the tracker writes
 
 ### Changed
 - Twitch collection batches user and channel lookups 100 at a time, fetches follower totals concurrently and removes the fixed sleeps; each run logs its duration and API request count
