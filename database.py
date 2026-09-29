@@ -25,14 +25,18 @@ STREAMER_COLUMNS = {
     'stream_title': 'TEXT',
     'thumbnail_url': 'TEXT',
     'started_at': 'TEXT',
-    'is_mature': 'BOOLEAN',
     'content_classification_labels': 'TEXT',
     'is_branded_content': 'BOOLEAN',
     'profile_image_url': 'TEXT',
     'created_at': 'TEXT',
 }
 STREAMER_JSON_COLUMNS = {'tags', 'content_classification_labels'}
-STREAMER_BOOL_COLUMNS = {'is_partner', 'is_live', 'is_mature', 'is_branded_content'}
+STREAMER_BOOL_COLUMNS = {'is_partner', 'is_live', 'is_branded_content'}
+# Columns from earlier versions that are no longer collected
+DROPPED_STREAMER_COLUMNS = [
+    'view_count',  # deprecated by Twitch, always 0
+    'is_mature',   # replaced by content_classification_labels, always false
+]
 
 # Time-series and relationship tables used by the tracker, relations and metrics modules
 EXTRA_TABLES = [
@@ -174,9 +178,9 @@ class DatabaseManager:
                 # ADD COLUMN can't carry PRIMARY KEY / NOT NULL constraints; the plain type is enough
                 cursor.execute(f"ALTER TABLE streamers ADD COLUMN {name} {sql_type.split()[0]}")
 
-        # view_count was deprecated by Twitch (always 0)
-        if 'view_count' in existing:
-            cursor.execute("ALTER TABLE streamers DROP COLUMN view_count")
+        for name in DROPPED_STREAMER_COLUMNS:
+            if name in existing:
+                cursor.execute(f"ALTER TABLE streamers DROP COLUMN {name}")
 
         self.conn.commit()
 
@@ -214,10 +218,20 @@ class DatabaseManager:
     # ==================== STREAMER OPERATIONS ====================
     
     def save_streamers(self, streamers_data: List[Dict]) -> int:
-        """Save or update streamer data"""
+        """Save or update streamer data; records with follower_count_known=False keep the stored count"""
+        unknown_ids = [s['user_id'] for s in streamers_data if s.get('follower_count_known') is False]
+        stored_counts = {}
+        if unknown_ids:
+            placeholders = ', '.join('?' for _ in unknown_ids)
+            stored_counts = dict(self.conn.execute(
+                f"SELECT user_id, follower_count FROM streamers WHERE user_id IN ({placeholders})", unknown_ids
+            ).fetchall())
+
         rows = []
         for streamer in streamers_data:
             row = {col: streamer.get(col) for col in STREAMER_COLUMNS}
+            if streamer.get('follower_count_known') is False:
+                row['follower_count'] = stored_counts.get(streamer['user_id'], row['follower_count'])
             for col in STREAMER_JSON_COLUMNS:
                 row[col] = json.dumps(row[col] or [], ensure_ascii=False)
             rows.append(row)

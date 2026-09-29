@@ -19,7 +19,7 @@ def streamer(user_id='1', **overrides):
         'description': 'desc', 'follower_count': 1234, 'game_name': 'Game', 'game_id': 'g1',
         'language': 'en', 'tags': ['English', 'FPS'], 'is_partner': True, 'broadcaster_type': 'partner',
         'is_live': True, 'viewer_count': 42, 'stream_title': 'title', 'thumbnail_url': 'thumb',
-        'started_at': '2026-09-27 10:00:00+00:00', 'is_mature': False,
+        'started_at': '2026-09-27 10:00:00+00:00',
         'content_classification_labels': ['Gambling'], 'is_branded_content': True,
         'profile_image_url': 'img', 'created_at': '2015-01-01 00:00:00+00:00',
     }
@@ -47,7 +47,8 @@ def test_migrates_legacy_streamers_table(tmp_path):
             user_id TEXT PRIMARY KEY, username TEXT NOT NULL, display_name TEXT, game_name TEXT,
             follower_count INTEGER, view_count INTEGER, language TEXT, is_partner BOOLEAN,
             is_live BOOLEAN, viewer_count INTEGER, stream_title TEXT, thumbnail_url TEXT,
-            profile_image_url TEXT, created_at TEXT, last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            profile_image_url TEXT, created_at TEXT, is_mature BOOLEAN,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
     conn.execute("INSERT INTO streamers (user_id, username, follower_count, view_count, is_partner) "
                  "VALUES ('7', 'old', 99, 0, 1)")
@@ -56,12 +57,12 @@ def test_migrates_legacy_streamers_table(tmp_path):
 
     manager = DatabaseManager(path)
     cols = columns(manager.conn, 'streamers')
-    assert 'view_count' not in cols
-    assert {'tags', 'description', 'content_classification_labels', 'is_mature'} <= cols
+    assert 'view_count' not in cols and 'is_mature' not in cols
+    assert {'tags', 'description', 'content_classification_labels', 'is_branded_content'} <= cols
 
     [row] = manager.load_streamers()
     assert row['username'] == 'old' and row['follower_count'] == 99
-    assert row['tags'] == [] and row['is_partner'] is True and row['is_mature'] is False
+    assert row['tags'] == [] and row['is_partner'] is True and row['is_branded_content'] is False
     manager.close()
 
 
@@ -79,6 +80,17 @@ def test_save_streamers_replaces_latest_state(db):
     db.save_streamers([streamer(follower_count=10)])
     db.save_streamers([streamer(follower_count=20)])
     assert [s['follower_count'] for s in db.load_streamers()] == [20]
+
+
+def test_unknown_follower_count_keeps_stored_value(db):
+    db.save_streamers([streamer('1', follower_count=500)])
+    db.save_streamers([
+        streamer('1', follower_count=0, follower_count_known=False, viewer_count=99),
+        streamer('2', follower_count=0, follower_count_known=False),
+    ])
+    loaded = {s['user_id']: s for s in db.load_streamers()}
+    assert loaded['1']['follower_count'] == 500 and loaded['1']['viewer_count'] == 99
+    assert loaded['2']['follower_count'] == 0  # never stored before: nothing to keep
 
 
 def test_load_streamers_filters(db):

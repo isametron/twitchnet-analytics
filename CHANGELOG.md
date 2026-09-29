@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Streamer records include `broadcaster_type`, `is_mature`, `content_classification_labels`, `is_branded_content` and `started_at`
+- Streamer records include `broadcaster_type`, `content_classification_labels`, `is_branded_content` and `started_at`
+- A failed follower lookup is marked `follower_count_known=False`, and saving keeps the previously stored count instead of overwriting it with 0
 - Database tables for stream/follower snapshots, chat presence, raids, teams, collabs, videos, clips, top games and tracked channels
 - Automatic migration of existing databases to the new streamer schema
 - pytest suite for the collector (against a fake Twitch client) and the database
@@ -35,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Committed PyVis assets (`lib/`) and SQLite database; both are now gitignored
 - `TwitchDataCollector.get_follows_network` stub
 - The deprecated `view_count` field (Twitch always returns 0)
+- The stream `is_mature` flag (replaced by content classification labels; Twitch always returns false)
 - Unused dependencies `matplotlib`, `seaborn` and `sqlalchemy`, plus unused imports and variables
 
 ## [1.0.0] - 2025-01-14

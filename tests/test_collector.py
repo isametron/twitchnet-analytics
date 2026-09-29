@@ -14,8 +14,9 @@ LANGUAGES = twitch_api.DIVERSE_LANGUAGES
 class FakeTwitch:
     """Mimics the twitchAPI 4.x methods the collector uses and records every call."""
 
-    def __init__(self, n_streams=10, channel_tags=('ChannelTag',), missing_game=False):
+    def __init__(self, n_streams=10, channel_tags=('ChannelTag',), missing_game=False, failing_followers=()):
         self.calls = defaultdict(list)
+        self.failing_followers = set(failing_followers)
         self.channel_tags = list(channel_tags)
         self.missing_game = missing_game
         self.streams = [
@@ -23,7 +24,7 @@ class FakeTwitch:
                 user_id=str(i), user_login=f'user{i}', game_id='g1', game_name='Stream Game',
                 language=LANGUAGES[i % len(LANGUAGES)], viewer_count=10_000 - i, title=f'title {i}',
                 thumbnail_url=f'thumb{i}', started_at='2026-09-27 10:00:00+00:00',
-                is_mature=(i % 2 == 0), tags=['StreamTag'],
+                tags=['StreamTag'],
             )
             for i in range(n_streams)
         ]
@@ -62,6 +63,8 @@ class FakeTwitch:
 
     async def get_channel_followers(self, broadcaster_id, first=None):
         self.calls['get_channel_followers'].append(broadcaster_id)
+        if broadcaster_id in self.failing_followers:
+            raise ConnectionError('Cannot connect to host api.twitch.tv')
         return SimpleNamespace(total=int(broadcaster_id) * 10)
 
 
@@ -98,13 +101,13 @@ def test_record_shape_and_field_sources():
     record = asyncio.run(make_collector(fake).get_top_streamers(max_results=1))[0]
 
     assert set(record) == {
-        'user_id', 'username', 'display_name', 'description', 'follower_count', 'game_name', 'game_id',
-        'language', 'tags', 'is_partner', 'broadcaster_type', 'is_live', 'viewer_count', 'stream_title',
-        'thumbnail_url', 'started_at', 'is_mature', 'content_classification_labels',
+        'user_id', 'username', 'display_name', 'description', 'follower_count', 'follower_count_known',
+        'game_name', 'game_id', 'language', 'tags', 'is_partner', 'broadcaster_type', 'is_live',
+        'viewer_count', 'stream_title', 'thumbnail_url', 'started_at', 'content_classification_labels',
         'is_branded_content', 'profile_image_url', 'created_at',
     }
-    assert 'view_count' not in record
     assert record['follower_count'] == 0  # user 0 -> fake total 0
+    assert record['follower_count_known'] is True
     # Game and tags come from the channel, language from the live stream
     assert record['game_name'] == 'Channel Game'
     assert record['game_id'] == 'g2'
@@ -112,10 +115,22 @@ def test_record_shape_and_field_sources():
     assert record['language'] == 'en'
     assert record['is_live'] is True
     assert record['viewer_count'] == 10_000
-    assert record['is_mature'] is True
     assert record['content_classification_labels'] == ['Gambling']
     assert record['is_branded_content'] is True
     assert record['is_partner'] is True and record['broadcaster_type'] == 'partner'
+
+
+def test_failed_follower_lookup_is_marked_unknown(monkeypatch):
+    async def no_sleep(_):
+        pass
+    monkeypatch.setattr(twitch_api.asyncio, 'sleep', no_sleep)
+
+    fake = FakeTwitch(n_streams=3, failing_followers={'1'})
+    records = {r['user_id']: r for r in asyncio.run(make_collector(fake).get_top_streamers(max_results=3))}
+
+    assert records['1']['follower_count'] == 0 and records['1']['follower_count_known'] is False
+    assert records['2']['follower_count'] == 20 and records['2']['follower_count_known'] is True
+    assert fake.calls['get_channel_followers'].count('1') == 3  # retried before giving up
 
 
 def test_stream_tags_used_when_channel_has_none():

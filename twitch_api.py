@@ -103,8 +103,8 @@ class TwitchDataCollector:
                 channels[channel.broadcaster_id] = channel
         return channels
 
-    async def _fetch_follower_totals(self, user_ids: List[str]) -> Dict[str, int]:
-        """Fetch follower totals concurrently (Helix has no batch endpoint for this)"""
+    async def _fetch_follower_totals(self, user_ids: List[str]) -> Dict[str, Optional[int]]:
+        """Fetch follower totals concurrently (Helix has no batch endpoint for this); None if the lookup failed"""
         semaphore = asyncio.Semaphore(FOLLOWER_CONCURRENCY)
 
         async def fetch_one(user_id):
@@ -112,7 +112,7 @@ class TwitchDataCollector:
                 result = await self._retry_with_backoff(
                     self.twitch.get_channel_followers, broadcaster_id=user_id, first=1
                 )
-                return user_id, (result.total if result else 0)
+                return user_id, (result.total if result else None)
 
         self.request_count += len(user_ids)
         return dict(await asyncio.gather(*(fetch_one(uid) for uid in user_ids)))
@@ -131,14 +131,22 @@ class TwitchDataCollector:
             self._fetch_follower_totals(user_ids)
         )
 
+        unknown = sum(1 for uid in user_ids if uid in users and followers.get(uid) is None)
+        if unknown:
+            print(f"⚠️ Follower count unavailable for {unknown} streamers; saving keeps their previous count")
+
         return [
-            self._build_record(users[uid], channels.get(uid), followers.get(uid, 0), streams_by_user[uid])
+            self._build_record(users[uid], channels.get(uid), followers.get(uid), streams_by_user[uid])
             for uid in user_ids if uid in users
         ]
 
     @staticmethod
-    def _build_record(user, channel=None, follower_count: int = 0, stream=None) -> Dict:
-        """Merge user, channel and (optional) live stream data into one streamer record"""
+    def _build_record(user, channel=None, follower_count: Optional[int] = 0, stream=None) -> Dict:
+        """
+        Merge user, channel and (optional) live stream data into one streamer record.
+        A follower_count of None means the lookup failed: the record gets 0 with
+        follower_count_known=False so DatabaseManager.save_streamers keeps the stored count.
+        """
         # Language: live stream first (most accurate), then channel setting, then English
         language = (stream.language if stream else None) or \
                    (channel.broadcaster_language if channel else None) or 'en'
@@ -153,7 +161,8 @@ class TwitchDataCollector:
             'username': user.login,
             'display_name': user.display_name,
             'description': user.description or '',
-            'follower_count': follower_count,
+            'follower_count': follower_count or 0,
+            'follower_count_known': follower_count is not None,
             'game_name': game_name,
             'game_id': game_id,
             'language': language,
@@ -165,7 +174,6 @@ class TwitchDataCollector:
             'stream_title': stream.title if stream else '',
             'thumbnail_url': stream.thumbnail_url if stream else '',
             'started_at': str(stream.started_at) if stream and stream.started_at else '',
-            'is_mature': bool(stream.is_mature) if stream else False,
             'content_classification_labels': list(channel.content_classification_labels or []) if channel else [],
             'is_branded_content': bool(channel.is_branded_content) if channel else False,
             'profile_image_url': user.profile_image_url or '',
@@ -253,7 +261,7 @@ class TwitchDataCollector:
             self._fetch_channels([user.id]),
             self._fetch_follower_totals([user.id])
         )
-        record = self._build_record(user, channels.get(user.id), followers.get(user.id, 0), stream_data)
+        record = self._build_record(user, channels.get(user.id), followers.get(user.id), stream_data)
         if record['game_name'] == 'Unknown' and stream_game_name:
             record['game_name'] = stream_game_name
         return record
