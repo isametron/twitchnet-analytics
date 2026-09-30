@@ -125,32 +125,39 @@ streamlit run app.py
 
 Then open http://localhost:8501 in your browser.
 
-### Relationship tracking
+### Tracking (relationships and history)
 
-By default the network links streamers who share attributes (game, language, tags, partner status, follower tier). `tracker.py` collects **observed** relationships instead:
+By default the network links streamers who share attributes (game, language, tags, partner status, follower tier). `tracker.py` collects **observed** relationships and history for a list of tracked channels:
 
-| Signal | Source | Needs |
-|--------|--------|-------|
-| Chat audience overlap | Anonymous Twitch chat (IRC) | Nothing |
-| Raids | EventSub WebSocket | Twitch sign-in (one time) |
-| Teams | Helix `teams` endpoints | App credentials |
-| Co-streams | Shared Chat sessions + `@mentions` in stream titles | App credentials |
+| Data | Source | How often | Needs |
+|------|--------|-----------|-------|
+| Viewer snapshots, game history | Helix streams | Every 5 min | App credentials |
+| Chat audience overlap | Anonymous Twitch chat (IRC) | Continuous | Nothing |
+| Raids into tracked channels | Raid notices in chat (IRC) | Continuous | Nothing |
+| Co-streams | Shared Chat sessions + `@mentions` in stream titles | Every 5 min | App credentials |
+| Top categories | Helix games | Hourly | App credentials |
+| Followers, VODs, clips, schedules | Helix | Every 6 h | App credentials |
+| Teams | Helix teams | Daily | App credentials |
 
 ```bash
-# 1. Choose channels to track: the top 100 live right now
-python tracker.py --seed --live
+# 1. Choose channels to track: the top channels live right now
+python tracker.py --seed --live --limit 300 --replace
 
-# 2. One-time Twitch sign-in for raids (opens your browser)
-#    Requires http://localhost:17563 as an OAuth Redirect URL on your Twitch application
-python auth.py
-
-# 3. Run the tracker (Ctrl+C to stop; --no-raids skips the sign-in)
-python tracker.py
+# 2. Run the tracker (Ctrl+C to stop)
+python tracker.py > tracker.log 2>&1
 
 # Compare network structure with and without the observed relationships
 python scripts/test_build.py --mode attribute
 python scripts/test_build.py --mode real
 ```
+
+A run of 10-12 hours covers most channels' end of stream, which is when raids happen. Tracking more channels gives more relationships in the same time; chat opens one connection per 100 channels. Raids are read from the raided channel's chat, so every raid between two tracked channels is captured (raids out to untracked channels are not).
+
+`auth.py` signs in a Twitch user for EventSub features (`relations.RaidListener`). The tracker doesn't need it: Twitch limits EventSub WebSocket subscriptions for other people's channels to a total cost of 10, so it only suits a handful of channels.
+
+`main.py --mode real|hybrid` builds the network from this data (`hybrid` keeps attribute edges as weak background ties). Recommendations use the tracked history automatically: engagement from average viewers and chat activity, content matching from game history, reach from average viewers, and brand safety from Twitch content labels.
+
+**Privacy:** the chat logger never stores message text. Chatters are stored only as salted SHA-256 hashes of their user id, with the salt kept locally in `data/processed/chat_salt.json`, to measure audience overlap between channels.
 
 ### Tests
 
@@ -158,10 +165,6 @@ python scripts/test_build.py --mode real
 python -m pytest        # no network access or credentials needed
 python -m ruff check .  # lint
 ```
-
-`main.py --mode real|hybrid` builds the network from this data. `hybrid` keeps attribute edges as weak background ties.
-
-**Privacy:** the chat logger never stores message text. Chatters are stored only as salted SHA-256 hashes of their user id, with the salt kept locally in `data/processed/chat_salt.json`, to measure audience overlap between channels.
 
 ---
 
@@ -197,12 +200,14 @@ twitchnet-analytics/
 ├── 📄 app.py                   # Streamlit UI entrypoint (page router)
 ├── 📄 main.py                  # CLI pipeline: collect → network → recommend
 ├── 📄 tracker.py               # Long-running relationship tracker
-├── 📄 auth.py                  # One-time Twitch user sign-in (OAuth)
+├── 📄 auth.py                  # Twitch user sign-in for EventSub (optional)
 │
 ├── 📦 twitchnet/               # Core library
 │   ├── config.py               # Settings, paths and credentials
 │   ├── twitch_api.py           # Twitch API data collector
 │   ├── relations.py            # Chat overlap, raids, teams, collabs
+│   ├── content.py              # VODs, clips, schedules, top categories
+│   ├── metrics.py              # Per-streamer metrics from tracked history
 │   ├── database.py             # SQLite persistence and migrations
 │   ├── graph_builder.py        # Network construction (attribute/real/hybrid)
 │   ├── centrality.py           # Centrality calculations

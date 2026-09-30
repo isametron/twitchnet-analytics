@@ -102,6 +102,29 @@ class CentralityAnalyzer:
         print("✨ Composite influence score calculated")
         return influence_scores
 
+    def calculate_raid_influence(self, db) -> Dict:
+        """
+        PageRank on the directed graph of raids between the graph's streamers: high when raids
+        (and the audiences they bring) flow towards a streamer. All zeros when no raids are recorded.
+
+        Args:
+            db: DatabaseManager with raids collected by tracker.py
+        """
+        raid_graph = nx.DiGraph()
+        raid_graph.add_nodes_from(self.graph.nodes())
+        rows = db.conn.execute("SELECT from_id, to_id, COUNT(*) FROM raids GROUP BY from_id, to_id").fetchall()
+        for from_id, to_id, count in rows:
+            if from_id in raid_graph and to_id in raid_graph and from_id != to_id:
+                raid_graph.add_edge(from_id, to_id, weight=count)
+
+        if raid_graph.number_of_edges():
+            scores = nx.pagerank(raid_graph, weight='weight')
+        else:
+            scores = {node: 0.0 for node in raid_graph}
+        self.centrality_scores['raid_influence'] = scores
+        print(f"🎯 Raid influence calculated from {raid_graph.number_of_edges()} raid links")
+        return scores
+
     def get_top_influencers(self, metric: str = 'pagerank', top_n: int = 10) -> list:
         """
         Get top influencers based on centrality metric

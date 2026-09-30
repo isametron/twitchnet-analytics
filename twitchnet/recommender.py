@@ -5,7 +5,23 @@ import numpy as np
 import pandas as pd
 
 from twitchnet.config import Config
+from twitchnet.scoring import AdvancedScorer
 from twitchnet.similarity_calc import SimilarityCalculator
+
+# Rough assumption: unique viewers of a sponsored stream relative to its average concurrent viewers
+UNIQUE_VIEWERS_PER_CONCURRENT = 3
+# Fallback when no viewer history exists: share of followers reached
+FOLLOWER_REACH_RATE = 0.3
+
+
+def _value(row: pd.Series, column: str, default=None):
+    """Column value from a streamer row, with default for a missing row or column and NaN"""
+    if row is None:
+        return default
+    value = row.get(column, default)
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return default
+    return value
 
 
 @dataclass
@@ -38,6 +54,23 @@ class StreamerRecommender:
         self.streamers_df = streamers_df
         self.centrality_scores = centrality_scores
         self.similarity_calculator = similarity_calculator
+        self.scorer = AdvancedScorer()
+
+    def _streamer_row(self, streamer_id: str):
+        rows = self.streamers_df[self.streamers_df['user_id'] == streamer_id]
+        return None if rows.empty else rows.iloc[0]
+
+    def brand_safety(self, streamer_id: str) -> float:
+        """1 - risk score, using Twitch content labels when available (0-1, higher is safer)"""
+        row = self._streamer_row(streamer_id)
+        if row is None:
+            return 0.0
+        labels = _value(row, 'content_classification_labels', [])
+        risk = self.scorer.calculate_risk_score(
+            _value(row, 'follower_count', 0), bool(_value(row, 'is_partner', False)),
+            content_labels=labels if isinstance(labels, list) else []
+        )
+        return 1 - risk
 
     def calculate_composite_score(self, streamer_id: str,
                                   content_similarity: float,
@@ -62,15 +95,17 @@ class StreamerRecommender:
             Config.CENTRALITY_WEIGHT
         )
 
-        # Engagement (simplified - live viewers as a share of followers)
+        # Engagement: tracked average viewers and chat activity when available,
+        # otherwise current live viewers as a share of followers
         if engagement_score is None:
             engagement_score = 0.0
-            streamer_data = self.streamers_df[self.streamers_df['user_id'] == streamer_id]
-            if not streamer_data.empty and 'viewer_count' in streamer_data:
-                viewer_count = streamer_data['viewer_count'].fillna(0).values[0]
-                follower_count = streamer_data['follower_count'].values[0]
-                engagement_score = viewer_count / max(follower_count, 1)
-                engagement_score = min(engagement_score / 0.1, 1.0)  # 10% of followers watching live = max
+            row = self._streamer_row(streamer_id)
+            if row is not None:
+                ratio = _value(row, 'viewer_to_follower_ratio')
+                if ratio is None:
+                    ratio = _value(row, 'viewer_count', 0) / max(_value(row, 'follower_count', 0), 1)
+                engagement_score = self.scorer.calculate_live_engagement(
+                    ratio, _value(row, 'chat_msgs_per_viewer_hour'))
 
         engagement_component = engagement_score * Config.ENGAGEMENT_WEIGHT
 
@@ -122,7 +157,9 @@ class StreamerRecommender:
                     'follower_count': streamer_data['follower_count'].values[0],
                     'content_similarity': sim_score,
                     'pagerank_centrality': self.centrality_scores.get('pagerank', {}).get(streamer_id, 0),
-                    'composite_score': composite_score
+                    'composite_score': composite_score,
+                    'avg_viewers': _value(streamer_data.iloc[0], 'avg_viewers'),
+                    'brand_safety_score': self.brand_safety(streamer_id)
                 })
 
         # Create DataFrame and sort
@@ -157,9 +194,9 @@ class StreamerRecommender:
             reach_score = np.log1p(streamer['follower_count']) / 20  # Normalized
             engagement_score = streamer.get('composite_score', 0)
 
-            # Brand safety (based on partner status and follower count)
-            streamer_data = self.streamers_df[self.streamers_df['user_id'] == streamer['user_id']]
-            brand_safety = 0.8 if streamer_data['is_partner'].values[0] else 0.5
+            # Brand safety (audience size, partner status and Twitch content labels)
+            brand_safety = self.brand_safety(streamer['user_id'])
+            avg_viewers = _value(self._streamer_row(streamer['user_id']), 'avg_viewers')
 
             # ROI estimation (higher engagement + lower cost per follower = better ROI)
             cost_estimate = streamer['follower_count'] * 0.01  # $0.01 per follower estimate
@@ -184,7 +221,8 @@ class StreamerRecommender:
                     'estimated_roi': roi_score,
                     'brand_safety_score': brand_safety,
                     'reach_score': reach_score,
-                    'engagement_score': engagement_score
+                    'engagement_score': engagement_score,
+                    'avg_viewers': avg_viewers
                 })
 
         # Sort by multi-objective score
@@ -221,7 +259,11 @@ class StreamerRecommender:
 
         for streamer, weight in zip(streamers, weights[:len(streamers)]):
             allocated = total_budget * weight
-            estimated_reach = int(streamer['follower_count'] * 0.3)  # 30% reach rate
+            avg_viewers = streamer.get('avg_viewers')
+            if avg_viewers is not None and not pd.isna(avg_viewers):
+                estimated_reach = int(avg_viewers * UNIQUE_VIEWERS_PER_CONCURRENT)
+            else:
+                estimated_reach = int(streamer['follower_count'] * FOLLOWER_REACH_RATE)
             estimated_engagement = estimated_reach * 0.05  # 5% engagement
 
             allocations.append(BudgetAllocation(

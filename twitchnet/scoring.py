@@ -9,6 +9,24 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
+# Risk added per Twitch content classification label present on a channel
+CONTENT_LABEL_RISK = {
+    'SexualThemes': 0.35,
+    'Gambling': 0.30,
+    'DrugsIntoxication': 0.25,
+    'ViolentGraphic': 0.20,
+    'DebatedSocialIssuesAndPolitics': 0.15,
+    'ProfanityVulgarity': 0.10,
+    'MatureGame': 0.10,
+}
+# Live engagement reaches its maximum at these levels
+FULL_VIEWER_TO_FOLLOWER_RATIO = 0.1  # 10% of followers watching live
+FULL_CHAT_MSGS_PER_VIEWER_HOUR = 2.0
+
+
+def _is_missing(value) -> bool:
+    return value is None or (isinstance(value, float) and np.isnan(value))
+
 
 class AdvancedScorer:
     """Advanced scoring engine for generating confidence and compatibility scores"""
@@ -18,23 +36,42 @@ class AdvancedScorer:
 
     def calculate_engagement_score(self, follower_count: int,
                                   avg_viewers: float = None,
-                                  is_partner: bool = False) -> float:
+                                  is_partner: bool = False,
+                                  chat_msgs_per_viewer_hour: float = None) -> float:
         """
-        Calculate engagement score based on follower count and partnership status
+        Calculate engagement score. With tracked average viewers it measures live engagement
+        (see calculate_live_engagement); otherwise it falls back to follower count and partnership.
 
         Args:
             follower_count: Number of followers
-            avg_viewers: Average concurrent viewers
+            avg_viewers: Average concurrent viewers (from tracker snapshots)
             is_partner: Whether streamer is a Twitch partner
+            chat_msgs_per_viewer_hour: Chat activity (from tracker chat logging)
 
         Returns:
             Engagement score (0-1)
         """
+        if not _is_missing(avg_viewers) and follower_count:
+            return self.calculate_live_engagement(avg_viewers / follower_count, chat_msgs_per_viewer_hour)
+
         partner_bonus = 0.1 if is_partner else 0.0
 
         # Apply logarithmic scaling to avoid extremes
         engagement = (np.log1p(follower_count) / np.log1p(1000000)) * 0.9 + partner_bonus
         return min(engagement, 1.0)
+
+    def calculate_live_engagement(self, viewer_to_follower_ratio: float,
+                                  chat_msgs_per_viewer_hour: float = None) -> float:
+        """
+        Engagement from how much of the audience watches live and how actively it chats (0-1).
+        Without chat data only the viewer ratio counts.
+        """
+        ratio = 0.0 if _is_missing(viewer_to_follower_ratio) else viewer_to_follower_ratio
+        viewer_score = min(max(ratio, 0.0) / FULL_VIEWER_TO_FOLLOWER_RATIO, 1.0)
+        if _is_missing(chat_msgs_per_viewer_hour):
+            return viewer_score
+        chat_score = min(max(chat_msgs_per_viewer_hour, 0.0) / FULL_CHAT_MSGS_PER_VIEWER_HOUR, 1.0)
+        return 0.6 * viewer_score + 0.4 * chat_score
 
     def calculate_niche_alignment_score(self, company_games: List[str],
                                        streamer_game: str,
@@ -168,7 +205,8 @@ class AdvancedScorer:
 
     def calculate_risk_score(self, follower_count: int,
                             is_partner: bool,
-                            mature_content: bool = False) -> float:
+                            mature_content: bool = False,
+                            content_labels: List[str] = None) -> float:
         """
         Calculate risk score for partnership (0 = low risk, 1 = high risk)
 
@@ -176,6 +214,7 @@ class AdvancedScorer:
             follower_count: Streamer's follower count
             is_partner: Partnership status
             mature_content: Whether stream contains mature content
+            content_labels: Twitch content classification labels on the channel
 
         Returns:
             Risk score (0-1) where 0 is best
@@ -195,6 +234,10 @@ class AdvancedScorer:
         # Mature content increases risk
         if mature_content:
             risk += 0.2
+
+        # Twitch content classification labels (unknown labels count as mildly risky)
+        for label in set(content_labels or []):
+            risk += CONTENT_LABEL_RISK.get(label, 0.1)
 
         return min(risk, 1.0)
 
@@ -309,7 +352,8 @@ class ScoreBatchProcessor:
 
             scores['risk_score'] = self.scorer.calculate_risk_score(
                 scores['follower_count'],
-                scores['is_partner']
+                scores['is_partner'],
+                content_labels=row.get('content_classification_labels')
             )
 
             results.append(scores)

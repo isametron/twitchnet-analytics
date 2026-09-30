@@ -61,6 +61,7 @@ def render():
                 st.session_state.centrality_scores = analyzer.calculate_all_centralities(
                     include_advanced=include_advanced_metrics
                 )
+                analyzer.calculate_raid_influence(st.session_state.db)
 
                 if calculate_influence:
                     progress_text.text("✨ Calculating influence scores...")

@@ -122,7 +122,8 @@ def test_load_streamers_filters(db):
     ]),
     ('save_clips', 'load_clips', [
         {'clip_id': 'c1', 'broadcaster_id': '1', 'created_at': '2026-09-26T10:00:00', 'view_count': 5,
-         'game_id': 'g1', 'title': 'clip'},
+         'game_id': 'g1', 'title': 'clip', 'url': 'https://clips.twitch.tv/c1',
+         'thumbnail_url': 'thumb'},
     ]),
 ])
 def test_table_round_trips(db, save, load, rows):
@@ -168,3 +169,26 @@ def test_tracked_channels_keep_first_added_at(db):
 
     db.remove_tracked_channels(['1'])
     assert [t['user_id'] for t in db.load_tracked_channels()] == ['2']
+
+
+def test_migrates_clips_table_without_url_columns(tmp_path):
+    path = str(tmp_path / 'old_clips.db')
+    conn = sqlite3.connect(path)
+    conn.execute('CREATE TABLE clips (clip_id TEXT PRIMARY KEY, broadcaster_id TEXT, created_at TEXT, '
+                 'view_count INTEGER, game_id TEXT, title TEXT)')
+    conn.execute("INSERT INTO clips VALUES ('c1', '1', 't', 5, 'g', 'old clip')")
+    conn.commit()
+    conn.close()
+
+    manager = DatabaseManager(path)
+    assert {'url', 'thumbnail_url'} <= columns(manager.conn, 'clips')
+    [clip] = manager.load_clips()
+    assert clip['title'] == 'old clip' and clip['url'] is None
+    manager.close()
+
+
+def test_schedules_round_trip(db):
+    row = {'user_id': '1', 'fetched_at': 't', 'has_schedule': 1, 'scheduled_hours_7d': 4.5, 'segments_7d': 2}
+    db.save_schedules([row])
+    db.save_schedules([dict(row, scheduled_hours_7d=6.0)])
+    assert db.load_schedules() == [dict(row, scheduled_hours_7d=6.0)]

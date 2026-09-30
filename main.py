@@ -10,6 +10,7 @@ from twitchnet.company_profiles import CompanyProfileManager
 from twitchnet.config import Config
 from twitchnet.database import DatabaseManager
 from twitchnet.graph_builder import NETWORK_MODES, StreamerNetworkBuilder
+from twitchnet.metrics import enrich_streamers
 from twitchnet.recommender import StreamerRecommender
 from twitchnet.similarity_calc import FeatureExtractor, SimilarityCalculator
 from twitchnet.twitch_api import TwitchDataCollector
@@ -77,6 +78,7 @@ def analyze_network(builder):
     # Calculate centrality
     analyzer = CentralityAnalyzer(builder.graph)
     analyzer.calculate_all_centralities()
+    analyzer.calculate_raid_influence(DatabaseManager())
     analyzer.save_centrality_scores()
 
     print("\nTop 5 Influencers (PageRank):")
@@ -104,8 +106,8 @@ def generate_recommendations(streamers, centrality_scores):
     print("STEP 4: GENERATING RECOMMENDATIONS")
     print("="*70)
 
-    # Prepare data
-    streamers_df = pd.DataFrame(streamers)
+    # Prepare data, with tracker metrics (average viewers, chat activity, game history) where collected
+    streamers_df = pd.DataFrame(enrich_streamers(streamers, DatabaseManager()))
 
     # Extract features
     extractor = FeatureExtractor()

@@ -2,8 +2,11 @@
 Real relationship signals between streamers:
 
 - ChatPresenceLogger: anonymous Twitch chat (IRC) reader recording which chatters appear in
-  which channels. Chatters are stored only as salted hashes, never message text.
-- RaidListener: EventSub WebSocket subscription to raids sent by tracked channels.
+  which channels (stored only as salted hashes, never message text), plus every raid into a
+  tracked channel, which chat announces as a USERNOTICE.
+- RaidListener: EventSub WebSocket subscription to raids sent by specific channels. Twitch caps
+  WebSocket subscriptions for other people's channels at a total cost of 10, so it only suits a
+  handful of channels; tracker.py records raids from chat instead.
 - fetch_teams / fetch_shared_chat / extract_title_mentions: team membership, Shared Chat
   co-streams and @mentions in stream titles.
 
@@ -30,7 +33,8 @@ from twitchnet.config import Config
 IRC_URL = 'wss://irc-ws.chat.twitch.tv:443'
 IRC_JOINS_PER_WINDOW = 20  # anonymous connections may JOIN 20 channels per 10 seconds
 IRC_JOIN_WINDOW_S = 10
-IRC_MAX_CHANNELS = 100  # per connection, to stay well inside Twitch's limits
+IRC_MAX_CHANNELS = 100  # per connection, to stay well inside Twitch's limits; more channels open more connections
+IRC_CONNECTION_STAGGER_S = 5  # delay between opening connections, so their JOIN bursts don't overlap
 CHAT_FLUSH_INTERVAL_S = 30
 EVENTSUB_MAX_SUBSCRIPTIONS = 300  # per WebSocket connection
 API_CONCURRENCY = 8
@@ -81,22 +85,34 @@ def parse_irc_line(line: str) -> Tuple[Dict[str, str], str, List[str]]:
 
 
 class ChatPresenceLogger:
-    """Log which (hashed) chatters talk in which tracked channels, via anonymous IRC"""
+    """
+    Log which (hashed) chatters talk in which tracked channels, via anonymous IRC.
+    Channels are split across connections of up to IRC_MAX_CHANNELS each.
+    """
 
     def __init__(self, db, channel_logins: List[str], salt: str = None,
                  flush_interval: float = CHAT_FLUSH_INTERVAL_S):
-        if len(channel_logins) > IRC_MAX_CHANNELS:
-            print(f"⚠️ Chat logger limited to {IRC_MAX_CHANNELS} of {len(channel_logins)} channels")
         self.db = db
-        self.channel_logins = [login.lower() for login in channel_logins[:IRC_MAX_CHANNELS]]
+        self.channel_logins = list(dict.fromkeys(login.lower() for login in channel_logins))
+        self.channel_groups = [self.channel_logins[i:i + IRC_MAX_CHANNELS]
+                               for i in range(0, len(self.channel_logins), IRC_MAX_CHANNELS)]
         self.salt = salt or load_chat_salt()
         self.flush_interval = flush_interval
         self._buffer: Dict[Tuple[str, str], List] = {}  # (channel_id, chatter_hash) -> [first, last, count]
         self.messages_seen = 0
-        self.connected = False
+        self.raids_seen = 0
+        self._raids: List[Dict] = []
+        self._activity: Dict[Tuple[str, str], int] = {}  # (channel_id, minute) -> messages
+        self.connected = 0  # number of connections currently open
+
+    @property
+    def connection_count(self) -> int:
+        return len(self.channel_groups)
 
     def record(self, channel_id: str, chatter_id: str, ts: str = None):
         ts = ts or utc_now()
+        minute_key = (channel_id, ts[:16] + ':00' + ts[19:])  # '2026-10-01T10:05:37+00:00' -> ...10:05:00+00:00
+        self._activity[minute_key] = self._activity.get(minute_key, 0) + 1
         key = (channel_id, hash_chatter(chatter_id, self.salt))
         entry = self._buffer.get(key)
         if entry:
@@ -105,6 +121,18 @@ class ChatPresenceLogger:
         else:
             self._buffer[key] = [ts, ts, 1]
         self.messages_seen += 1
+
+    def record_raid(self, tags: Dict[str, str]):
+        """Buffer a raid from a USERNOTICE: user-id raided room-id with msg-param-viewerCount viewers"""
+        sent_ms = tags.get('tmi-sent-ts')
+        ts = (datetime.fromtimestamp(int(sent_ms) / 1000, timezone.utc).isoformat(timespec='seconds')
+              if sent_ms and sent_ms.isdigit() else utc_now())
+        viewers = tags.get('msg-param-viewerCount', '0')
+        self._raids.append({'from_id': tags['user-id'], 'to_id': tags['room-id'], 'ts': ts,
+                            'viewers': int(viewers) if viewers.isdigit() else 0})
+        self.raids_seen += 1
+        print(f"🎯 Raid: {tags.get('msg-param-login', tags['user-id'])} -> channel {tags['room-id']} "
+              f"({viewers} viewers)")
 
     def handle_line(self, line: str) -> Optional[str]:
         """Process one IRC line; returns a reply to send (PONG), 'RECONNECT', or None"""
@@ -115,6 +143,9 @@ class ChatPresenceLogger:
             return 'RECONNECT'
         if command == 'PRIVMSG' and tags.get('room-id') and tags.get('user-id'):
             self.record(tags['room-id'], tags['user-id'])
+        elif (command == 'USERNOTICE' and tags.get('msg-id') == 'raid'
+              and tags.get('room-id') and tags.get('user-id')):
+            self.record_raid(tags)
         return None
 
     def flush(self) -> int:
@@ -124,13 +155,18 @@ class ChatPresenceLogger:
             for (channel_id, chatter_hash), (first, last, count) in self._buffer.items()
         ]
         self._buffer = {}
+        raids, self._raids = self._raids, []
+        self.db.save_raids(raids)
+        activity, self._activity = self._activity, {}
+        self.db.save_chat_activity([{'channel_id': channel_id, 'minute': minute, 'messages': count}
+                                    for (channel_id, minute), count in activity.items()])
         return self.db.save_chat_presence(rows)
 
-    async def _join_channels(self, ws):
-        for i in range(0, len(self.channel_logins), IRC_JOINS_PER_WINDOW):
-            batch = self.channel_logins[i:i + IRC_JOINS_PER_WINDOW]
+    async def _join_channels(self, ws, logins: List[str]):
+        for i in range(0, len(logins), IRC_JOINS_PER_WINDOW):
+            batch = logins[i:i + IRC_JOINS_PER_WINDOW]
             await ws.send_str('JOIN ' + ','.join(f'#{login}' for login in batch))
-            if i + IRC_JOINS_PER_WINDOW < len(self.channel_logins):
+            if i + IRC_JOINS_PER_WINDOW < len(logins):
                 await asyncio.sleep(IRC_JOIN_WINDOW_S + 1)
 
     async def _flush_periodically(self):
@@ -138,15 +174,15 @@ class ChatPresenceLogger:
             await asyncio.sleep(self.flush_interval)
             self.flush()
 
-    async def _session(self, session: aiohttp.ClientSession):
+    async def _session(self, session: aiohttp.ClientSession, logins: List[str], number: int):
         async with session.ws_connect(IRC_URL, heartbeat=60) as ws:
             # twitch.tv/tags adds room-id and user-id, so chatters are keyed by stable ids
             await ws.send_str('CAP REQ :twitch.tv/tags')
             await ws.send_str('PASS SCHMOOPIIE')
             await ws.send_str(f'NICK justinfan{random.randint(10000, 99999)}')
-            self.connected = True
-            print(f"💬 Chat logger connected; joining {len(self.channel_logins)} channels")
-            joiner = asyncio.create_task(self._join_channels(ws))
+            self.connected += 1
+            print(f"💬 Chat connection {number} open; joining {len(logins)} channels")
+            joiner = asyncio.create_task(self._join_channels(ws, logins))
             try:
                 async for msg in ws:
                     if msg.type != aiohttp.WSMsgType.TEXT:
@@ -161,24 +197,30 @@ class ChatPresenceLogger:
                             await ws.send_str(reply)
             finally:
                 joiner.cancel()
-                self.connected = False
+                self.connected -= 1
+
+    async def _keep_connected(self, session: aiohttp.ClientSession, logins: List[str], number: int):
+        """Keep one connection open, reconnecting with backoff"""
+        await asyncio.sleep((number - 1) * IRC_CONNECTION_STAGGER_S)
+        backoff = 1
+        while True:
+            started = time.time()
+            try:
+                await self._session(session, logins, number)
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
+                print(f"⚠️ Chat connection {number} error: {e}")
+            # Reset the backoff after a connection that stayed up for a while
+            backoff = 1 if time.time() - started > 60 else min(backoff * 2, 60)
+            print(f"💬 Chat connection {number} reconnecting in {backoff}s")
+            await asyncio.sleep(backoff)
 
     async def run(self):
-        """Log chat until cancelled, reconnecting with backoff and flushing to the database periodically"""
+        """Log chat until cancelled, flushing to the database periodically"""
         flusher = asyncio.create_task(self._flush_periodically())
-        backoff = 1
         try:
             async with aiohttp.ClientSession() as session:
-                while True:
-                    started = time.time()
-                    try:
-                        await self._session(session)
-                    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
-                        print(f"⚠️ Chat connection error: {e}")
-                    # Reset the backoff after a connection that stayed up for a while
-                    backoff = 1 if time.time() - started > 60 else min(backoff * 2, 60)
-                    print(f"💬 Chat logger reconnecting in {backoff}s")
-                    await asyncio.sleep(backoff)
+                await asyncio.gather(*(self._keep_connected(session, logins, number)
+                                       for number, logins in enumerate(self.channel_groups, start=1)))
         finally:
             flusher.cancel()
             self.flush()

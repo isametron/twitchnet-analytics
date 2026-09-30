@@ -81,10 +81,13 @@ def test_logger_aggregates_and_flushes_hashes_only(db):
     assert rows['111']['chatter_hash'] == rows['222']['chatter_hash'] == hash_chatter('999', 's')
 
 
-def test_logger_caps_channels(db, capsys):
-    logger = ChatPresenceLogger(db, [f'c{i}' for i in range(relations.IRC_MAX_CHANNELS + 5)], salt='s')
-    assert len(logger.channel_logins) == relations.IRC_MAX_CHANNELS
-    assert 'limited' in capsys.readouterr().out
+def test_logger_splits_channels_across_connections(db):
+    n = relations.IRC_MAX_CHANNELS * 2 + 5
+    logger = ChatPresenceLogger(db, [f'C{i}' for i in range(n)] + ['c0'], salt='s')  # duplicate ignored
+    assert logger.connection_count == 3
+    assert [len(g) for g in logger.channel_groups] == [relations.IRC_MAX_CHANNELS, relations.IRC_MAX_CHANNELS, 5]
+    assert sum(logger.channel_groups, []) == [f'c{i}' for i in range(n)]
+    assert logger.connected == 0
 
 
 def test_raid_handler_writes_raid(db):
@@ -139,4 +142,40 @@ def test_title_mentions():
     ]
     assert extract_title_mentions(streams, known) == [
         {'a_id': '1', 'b_id': '2', 'ts': '2026-09-30T08:00:00', 'source': 'title_mention'}
+    ]
+
+
+RAID_NOTICE = ('@badge-info=;login=raider;msg-id=raid;msg-param-displayName=Raider;msg-param-login=raider;'
+               'msg-param-viewerCount=1234;room-id=222;tmi-sent-ts=1790000000000;user-id=111 '
+               ':tmi.twitch.tv USERNOTICE #target')
+
+
+def test_raid_notice_in_chat_is_recorded(db):
+    logger = ChatPresenceLogger(db, ['target'], salt='s')
+    assert logger.handle_line(RAID_NOTICE) is None
+    assert logger.raids_seen == 1 and logger.messages_seen == 0
+    logger.flush()
+    logger.flush()  # raid buffer is cleared after saving
+    assert db.load_raids() == [{'from_id': '111', 'to_id': '222', 'ts': '2026-09-21T14:13:20+00:00',
+                                'viewers': 1234}]
+
+
+def test_other_usernotices_are_ignored(db):
+    logger = ChatPresenceLogger(db, ['target'], salt='s')
+    logger.handle_line(RAID_NOTICE.replace('msg-id=raid', 'msg-id=sub'))
+    logger.flush()
+    assert logger.raids_seen == 0 and db.load_raids() == []
+
+
+def test_flush_writes_per_minute_message_counts(db):
+    logger = ChatPresenceLogger(db, ['a'], salt='s')
+    logger.record('111', '1', ts='2026-10-01T10:05:10+00:00')
+    logger.record('111', '2', ts='2026-10-01T10:05:50+00:00')
+    logger.record('111', '1', ts='2026-10-01T10:06:01+00:00')
+    logger.flush()
+    logger.record('111', '3', ts='2026-10-01T10:06:30+00:00')
+    logger.flush()  # same minute again: counts add up
+    assert db.load_chat_activity('111') == [
+        {'channel_id': '111', 'minute': '2026-10-01T10:05:00+00:00', 'messages': 2},
+        {'channel_id': '111', 'minute': '2026-10-01T10:06:00+00:00', 'messages': 2},
     ]

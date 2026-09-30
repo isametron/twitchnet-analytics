@@ -27,9 +27,20 @@ class FeatureExtractor:
         """
         features = []
 
-        # Game categories (one-hot encoded)
-        games = streamers_df['game_name'].fillna('Unknown').apply(lambda x: [x]).tolist()
-        game_features = self.mlb_games.fit_transform(games)
+        # Game categories: share of tracked stream time per game (metrics.game_shares) where
+        # available, otherwise the current game one-hot encoded
+        current_games = streamers_df['game_name'].fillna('Unknown').tolist()
+        if 'game_shares' in streamers_df.columns:
+            shares = [s if isinstance(s, dict) and s else None for s in streamers_df['game_shares']]
+        else:
+            shares = [None] * len(streamers_df)
+        game_lists = [list(s) if s else [game] for s, game in zip(shares, current_games)]
+        self.mlb_games.fit(game_lists + [[game] for game in current_games])
+        game_features = self.mlb_games.transform(game_lists).astype(float)
+        column = {game: i for i, game in enumerate(self.mlb_games.classes_)}
+        for row, share_map in enumerate(shares):
+            for game, share in (share_map or {}).items():
+                game_features[row, column[game]] = share
         features.append(game_features)
 
         # Tags (multi-hot encoded); streamers loaded from the database have no tags column
@@ -40,9 +51,12 @@ class FeatureExtractor:
         tag_features = self.mlb_tags.fit_transform(tags)
         features.append(tag_features)
 
-        # Numerical features (normalized)
-        numerical_cols = ['follower_count', 'viewer_count']
-        numerical_features = streamers_df.reindex(columns=numerical_cols).fillna(0).values
+        # Numerical features (normalized); tracked average viewers replace the live count when available
+        numerical = streamers_df.reindex(columns=['follower_count', 'viewer_count']).astype(float)
+        if 'avg_viewers' in streamers_df.columns:
+            avg_viewers = pd.to_numeric(streamers_df['avg_viewers'], errors='coerce')
+            numerical['viewer_count'] = avg_viewers.fillna(numerical['viewer_count'])
+        numerical_features = numerical.fillna(0).values
         numerical_features = self.scaler.fit_transform(numerical_features)
         features.append(numerical_features)
 

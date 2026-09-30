@@ -6,6 +6,7 @@ import plotly.express as px
 import streamlit as st
 
 from twitchnet.company_profiles import CompanyProfile
+from twitchnet.metrics import enrich_streamers
 from twitchnet.recommender import StreamerRecommender
 from twitchnet.similarity_calc import FeatureExtractor, SimilarityCalculator
 
@@ -60,7 +61,8 @@ def render():
             )
 
             with st.spinner("Generating recommendations..."):
-                streamers_df = pd.DataFrame(st.session_state.streamers_data)
+                streamers_df = pd.DataFrame(
+                    enrich_streamers(st.session_state.streamers_data, st.session_state.db))
 
                 extractor = FeatureExtractor()
                 streamer_features = extractor.extract_streamer_features(streamers_df)
@@ -166,7 +168,8 @@ def render():
                             'display_name': row['display_name'],
                             'username': row['username'],
                             'follower_count': row['follower_count'],
-                            'estimated_roi': row['composite_score'] * 0.1
+                            'estimated_roi': row['composite_score'] * 0.1,
+                            'avg_viewers': row.get('avg_viewers')
                         })
 
                     allocations = recommender.allocate_budget(
@@ -240,7 +243,8 @@ def render():
                             'display_name': row['display_name'],
                             'username': row['username'],
                             'follower_count': row['follower_count'],
-                            'estimated_roi': row['composite_score'] * 0.1
+                            'estimated_roi': row['composite_score'] * 0.1,
+                            'avg_viewers': row.get('avg_viewers')
                         })
 
                     with st.spinner("Running comparisons..."):
@@ -299,7 +303,8 @@ def render():
                             'display_name': row['display_name'],
                             'username': row['username'],
                             'follower_count': row['follower_count'],
-                            'estimated_roi': row['composite_score'] * 0.1
+                            'estimated_roi': row['composite_score'] * 0.1,
+                            'avg_viewers': row.get('avg_viewers')
                         })
 
                     allocations = recommender.allocate_budget(streamers_list[:10], sim_budget, sim_strategy)

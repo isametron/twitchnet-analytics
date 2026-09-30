@@ -67,15 +67,28 @@ EXTRA_TABLES = [
         view_count INTEGER, title TEXT)''',
     '''CREATE TABLE IF NOT EXISTS clips (
         clip_id TEXT PRIMARY KEY, broadcaster_id TEXT, created_at TEXT, view_count INTEGER,
-        game_id TEXT, title TEXT)''',
+        game_id TEXT, title TEXT, url TEXT, thumbnail_url TEXT)''',
+    # Latest stream schedule summary per channel (upcoming 7 days)
+    '''CREATE TABLE IF NOT EXISTS schedules (
+        user_id TEXT PRIMARY KEY, fetched_at TEXT, has_schedule BOOLEAN, scheduled_hours_7d REAL,
+        segments_7d INTEGER)''',
     '''CREATE TABLE IF NOT EXISTS top_games (
         ts TEXT, game_id TEXT, name TEXT, rank INTEGER, viewer_sum INTEGER,
         PRIMARY KEY (ts, game_id))''',
     '''CREATE TABLE IF NOT EXISTS tracked_channels (
         user_id TEXT PRIMARY KEY, login TEXT, added_at TEXT)''',
+    # Messages per channel per minute, so chat activity can be compared with viewer snapshots
+    '''CREATE TABLE IF NOT EXISTS chat_activity (
+        channel_id TEXT, minute TEXT, messages INTEGER,
+        PRIMARY KEY (channel_id, minute))''',
     # Chat overlap self-joins chat_presence on chatter_hash
     'CREATE INDEX IF NOT EXISTS idx_chat_presence_chatter ON chat_presence (chatter_hash)',
 ]
+
+# Columns added to EXTRA_TABLES after their first release: table -> {column: type}
+ADDED_TABLE_COLUMNS = {
+    'clips': {'url': 'TEXT', 'thumbnail_url': 'TEXT'},
+}
 
 
 class DatabaseManager:
@@ -175,8 +188,15 @@ class DatabaseManager:
         print(f"Database initialized at {self.db_path}")
 
     def _migrate(self):
-        """Bring a streamers table created by an older version up to the current columns (idempotent)"""
+        """Bring tables created by an older version up to the current columns (idempotent)"""
         cursor = self.conn.cursor()
+
+        for table, columns in ADDED_TABLE_COLUMNS.items():
+            table_columns = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})")}
+            for name, sql_type in columns.items():
+                if name not in table_columns:
+                    cursor.execute(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
+
         existing = {row[1] for row in cursor.execute("PRAGMA table_info(streamers)")}
 
         for name, sql_type in STREAMER_COLUMNS.items():
@@ -569,6 +589,21 @@ class DatabaseManager:
     def load_chat_presence(self, channel_id: str = None) -> List[Dict]:
         return self._select_rows('chat_presence', {'channel_id': channel_id})
 
+    def save_chat_activity(self, rows: List[Dict]) -> int:
+        """Add message counts: channel_id, minute (ISO, truncated to the minute), messages"""
+        if not rows:
+            return 0
+        with self.conn:
+            self.conn.executemany('''
+                INSERT INTO chat_activity (channel_id, minute, messages) VALUES (?, ?, ?)
+                ON CONFLICT (channel_id, minute) DO UPDATE SET messages = messages + excluded.messages
+            ''', [(r['channel_id'], r['minute'], r['messages']) for r in rows])
+        return len(rows)
+
+    def load_chat_activity(self, channel_id: str = None, since: str = None) -> List[Dict]:
+        return self._select_rows('chat_activity', {'channel_id': channel_id, 'minute >=': since},
+                                 'channel_id, minute')
+
     def save_raids(self, raids: List[Dict]) -> int:
         """Save raids: from_id, to_id, ts, viewers"""
         return self._insert_rows('raids', raids, conflict='OR IGNORE')
@@ -601,11 +636,18 @@ class DatabaseManager:
         return self._select_rows('videos', {'user_id': user_id}, 'created_at')
 
     def save_clips(self, clips: List[Dict]) -> int:
-        """Save clips: clip_id, broadcaster_id, created_at, view_count, game_id, title"""
+        """Save clips: clip_id, broadcaster_id, created_at, view_count, game_id, title, url, thumbnail_url"""
         return self._insert_rows('clips', clips)
 
     def load_clips(self, broadcaster_id: str = None) -> List[Dict]:
         return self._select_rows('clips', {'broadcaster_id': broadcaster_id}, 'created_at')
+
+    def save_schedules(self, schedules: List[Dict]) -> int:
+        """Save schedule summaries: user_id, fetched_at, has_schedule, scheduled_hours_7d, segments_7d"""
+        return self._insert_rows('schedules', schedules)
+
+    def load_schedules(self) -> List[Dict]:
+        return self._select_rows('schedules')
 
     # ==================== TRACKER OPERATIONS ====================
 

@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `auth.py`: one-time Twitch sign-in with a stored, auto-refreshed user token (callback server bound to 127.0.0.1)
 - Network modes: `attribute` (previous behaviour), `real` (chat overlap, raids, teams and collabs only) and `hybrid`; available through `build_comprehensive_network(mode=..., db=...)`, `main.py --mode` and `scripts/test_build.py --mode`
 - SQLite WAL mode so the dashboard can read while the tracker writes
+- Tracker history: live viewer snapshots every 5 minutes, hourly top categories, follower counts, VODs, clips and stream schedules every 6 hours (`twitchnet/content.py`, new `schedules` table, clip URLs and thumbnails)
+- `twitchnet/metrics.py`: per-streamer average/peak viewers, hours streamed, days live, start-time spread, follower growth, viewer-to-follower ratio, chat messages per viewer-hour, raids in/out, game history and category variety, clip activity, VOD length and scheduled hours
+- Chat logging opens one connection per 100 channels, so the tracker can follow more than 100 channels
+- Raids are recorded from raid notices in chat, covering every tracked channel without a Twitch sign-in; the tracker no longer uses the EventSub raid listener, which Twitch limits to about 10 channels per user token (`--no-raids` removed)
+- `tracker.py --seed --replace` replaces the tracked list instead of adding to it
+- Brand safety uses Twitch content classification labels (risk per label in `scoring.CONTENT_LABEL_RISK`)
+- Engagement uses tracked average viewers and chat activity; content matching uses game history; campaign reach uses average viewers
+- `raid_influence` centrality: PageRank on the directed raid graph
 
 ### Changed
 - Core modules moved into the `twitchnet/` package (`from twitchnet.database import DatabaseManager`); the repository root keeps only the entry points `app.py`, `main.py`, `tracker.py` and `auth.py`. Module demos run with `python -m twitchnet.<module>`
