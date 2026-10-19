@@ -1,0 +1,10 @@
+# Re-seed every day at 20:00 UTC (01:30 IST): afternoon in the Americas, evening in Europe.
+[Unit]
+Description=Daily TwitchNet re-seed at 20:00 UTC
+
+[Timer]
+OnCalendar=*-*-* 20:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

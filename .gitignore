@@ -105,6 +105,7 @@ data/processed/*.json
 data/processed/*.db
 data/processed/*.db-shm
 data/processed/*.db-wal
+data/processed/backups/
 data/network_graphs/*.gpickle
 
 # PyVis local assets (the app loads vis-network from a CDN instead)

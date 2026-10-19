@@ -153,6 +153,8 @@ python scripts/test_build.py --mode real
 
 A run of 10-12 hours covers most channels' end of stream, which is when raids happen. Tracking more channels gives more relationships in the same time; chat opens one connection per 100 channels. Raids are read from the raided channel's chat, so every raid between two tracked channels is captured (raids out to untracked channels are not).
 
+For runs of several days, put the tracker on a server: [deploy/README.md](deploy/README.md) sets it up on an Azure VM with automatic restarts, a daily re-seed and daily database backups.
+
 `auth.py` signs in a Twitch user for EventSub features (`relations.RaidListener`). The tracker doesn't need it: Twitch limits EventSub WebSocket subscriptions for other people's channels to a total cost of 10, so it only suits a handful of channels.
 
 `main.py --mode real|hybrid` builds the network from this data (`hybrid` keeps attribute edges as weak background ties). Recommendations use the tracked history automatically: engagement from average viewers and chat activity, content matching from game history, reach from average viewers, and brand safety from Twitch content labels.
@@ -223,7 +225,8 @@ twitchnet-analytics/
 │   └── network_graph.py        # PyVis network builder
 │
 ├── 🧪 tests/                   # pytest suite (no network access needed)
-├── 🔧 scripts/                 # Utility scripts (network stats by mode)
+├── 🔧 scripts/                 # Utility scripts (network stats by mode, DB backup)
+├── 🚀 deploy/                  # Server setup for long tracker runs (systemd, Azure guide)
 │
 └── 📂 data/                    # Local data (contents gitignored)
     ├── raw/                    # Raw API responses

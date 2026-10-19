@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Brand safety uses Twitch content classification labels (risk per label in `scoring.CONTENT_LABEL_RISK`)
 - Engagement uses tracked average viewers and chat activity; content matching uses game history; campaign reach uses average viewers
 - `raid_influence` centrality: PageRank on the directed raid graph
+- Server deployment (`deploy/`): systemd service that keeps the tracker running, daily 20:00 UTC re-seed of the top 300 live channels with database backup, setup script and Azure VM guide
+- `scripts/backup_db.py`: consistent database backups while the tracker is writing (`--keep N` prunes old copies)
 
 ### Changed
 - Core modules moved into the `twitchnet/` package (`from twitchnet.database import DatabaseManager`); the repository root keeps only the entry points `app.py`, `main.py`, `tracker.py` and `auth.py`. Module demos run with `python -m twitchnet.<module>`

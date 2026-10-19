@@ -1,0 +1,16 @@
+# Daily sampling step: add the top 300 live channels to the tracked list, back up the
+# database (keeping 7 copies), then restart the tracker so it picks up the new channels.
+# Triggered by twitchnet-reseed.timer. Installed by deploy/setup_vm.sh.
+[Unit]
+Description=TwitchNet daily re-seed and backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__REPO__
+ExecStart=__REPO__/.venv/bin/python tracker.py --seed --live --limit 300
+ExecStart=__REPO__/.venv/bin/python scripts/backup_db.py --keep 7
+# "+" runs this step with full privileges, which restarting a system service needs
+ExecStartPost=+/bin/systemctl restart twitchnet-tracker.service

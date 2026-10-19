@@ -1,0 +1,4 @@
+# Server files must keep Linux line endings even when committed from Windows
+*.sh text eol=lf
+deploy/*.service text eol=lf
+deploy/*.timer text eol=lf

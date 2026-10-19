@@ -1,0 +1,20 @@
+# Runs tracker.py continuously and restarts it if it stops.
+# Installed by deploy/setup_vm.sh, which fills in __USER__ and __REPO__.
+[Unit]
+Description=TwitchNet tracker (snapshots, chat overlap, raids, content)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__REPO__
+ExecStart=__REPO__/.venv/bin/python tracker.py
+Restart=always
+RestartSec=30
+# Logs: journalctl -u twitchnet-tracker -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
