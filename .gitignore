@@ -117,3 +117,9 @@ lib/
 *.h5
 *.ckpt
 
+
+# =========================
+# Research paper material (kept local, not published)
+# =========================
+reports/
+research_notes/

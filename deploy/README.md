@@ -105,7 +105,19 @@ scp -i C:\Users\<you>\.ssh\twitchnet-tracker_key.pem "azureuser@<PUBLIC-IP>:twit
 
 To analyse a backup, copy it over `data/processed/twitchnet.db` in your local repo (keep your own copy first).
 
-## 7. Update the code
+## 7. Handle an opt-out request
+
+Run this on the VM, where the data and its salt live (see [PRIVACY.md](../PRIVACY.md)):
+
+```bash
+cd ~/twitchnet-analytics && .venv/bin/python scripts/opt_out.py <username>
+```
+
+It deletes the account's data as a chatter and as a channel, and keeps it out of future collection
+while the tracker keeps running. Then replace any downloaded copies of the database with a fresh
+backup, and confirm to the person by email. Server backups clear within 7 days as they rotate.
+
+## 8. Update the code
 
 After pushing changes to GitHub (on the VM):
 
@@ -113,7 +125,7 @@ After pushing changes to GitHub (on the VM):
 cd ~/twitchnet-analytics && git pull && sudo systemctl restart twitchnet-tracker
 ```
 
-## 8. Costs and shutting down
+## 9. Costs and shutting down
 
 - Standard_B1ms costs roughly $15-20 per month, well within the student credit for a few weeks.
   Check **Cost Management** in the portal now and then.

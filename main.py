@@ -11,6 +11,7 @@ from twitchnet.config import Config
 from twitchnet.database import DatabaseManager
 from twitchnet.graph_builder import NETWORK_MODES, StreamerNetworkBuilder
 from twitchnet.metrics import enrich_streamers
+from twitchnet.privacy import OptOutList
 from twitchnet.recommender import StreamerRecommender
 from twitchnet.similarity_calc import FeatureExtractor, SimilarityCalculator
 from twitchnet.twitch_api import TwitchDataCollector
@@ -34,6 +35,7 @@ async def collect_data():
         all_streamers.extend(streamers)
         print(f"Collected {len(streamers)} streamers from {game}")
 
+    all_streamers = OptOutList(DatabaseManager()).filter(all_streamers)
     collector.save_data(all_streamers, 'streamers.json')
     await collector.close()
 

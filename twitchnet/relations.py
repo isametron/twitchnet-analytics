@@ -13,12 +13,8 @@ Real relationship signals between streamers:
 Everything is written to DatabaseManager tables; graph_builder turns it into edges.
 """
 import asyncio
-import hashlib
-import json
-import os
 import random
 import re
-import secrets
 import time
 from datetime import datetime, timezone
 from itertools import combinations
@@ -28,7 +24,7 @@ import aiohttp
 from twitchAPI.eventsub.websocket import EventSubWebsocket
 from twitchAPI.type import TwitchResourceNotFound
 
-from twitchnet.config import Config
+from twitchnet.privacy import OptOutList, hash_chatter, load_chat_salt
 
 IRC_URL = 'wss://irc-ws.chat.twitch.tv:443'
 IRC_JOINS_PER_WINDOW = 20  # anonymous connections may JOIN 20 channels per 10 seconds
@@ -38,29 +34,12 @@ IRC_CONNECTION_STAGGER_S = 5  # delay between opening connections, so their JOIN
 CHAT_FLUSH_INTERVAL_S = 30
 EVENTSUB_MAX_SUBSCRIPTIONS = 300  # per WebSocket connection
 API_CONCURRENCY = 8
-SALT_PATH = os.path.join(Config.PROCESSED_DATA_DIR, 'chat_salt.json')
 
 MENTION_RE = re.compile(r'@([A-Za-z0-9_]{3,25})')
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec='seconds')
-
-
-def load_chat_salt(path: str = SALT_PATH) -> str:
-    """Per-installation secret salt for chatter hashes; created on first use"""
-    if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)['salt']
-    salt = secrets.token_hex(16)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump({'salt': salt}, f)
-    return salt
-
-
-def hash_chatter(user_id: str, salt: str) -> str:
-    return hashlib.sha256(f"{salt}:{user_id}".encode('utf-8')).hexdigest()
 
 
 def parse_irc_line(line: str) -> Tuple[Dict[str, str], str, List[str]]:
@@ -97,6 +76,7 @@ class ChatPresenceLogger:
         self.channel_groups = [self.channel_logins[i:i + IRC_MAX_CHANNELS]
                                for i in range(0, len(self.channel_logins), IRC_MAX_CHANNELS)]
         self.salt = salt or load_chat_salt()
+        self.opt_outs = OptOutList(db, self.salt)
         self.flush_interval = flush_interval
         self._buffer: Dict[Tuple[str, str], List] = {}  # (channel_id, chatter_hash) -> [first, last, count]
         self.messages_seen = 0
@@ -149,17 +129,23 @@ class ChatPresenceLogger:
         return None
 
     def flush(self) -> int:
+        # Checked here, not on arrival, so an opt-out also covers anything still in the buffer
+        self.opt_outs.refresh()
+        channels = {channel_id for channel_id, _ in list(self._buffer) + list(self._activity)}
+        blocked_channels = {channel_id for channel_id in channels if self.opt_outs.contains(channel_id)}
         rows = [
             {'channel_id': channel_id, 'chatter_hash': chatter_hash,
              'first_seen': first, 'last_seen': last, 'msg_count': count}
             for (channel_id, chatter_hash), (first, last, count) in self._buffer.items()
+            if channel_id not in blocked_channels and chatter_hash not in self.opt_outs.hashes
         ]
         self._buffer = {}
         raids, self._raids = self._raids, []
-        self.db.save_raids(raids)
+        self.db.save_raids(self.opt_outs.filter(self.opt_outs.filter(raids, 'from_id'), 'to_id'))
         activity, self._activity = self._activity, {}
         self.db.save_chat_activity([{'channel_id': channel_id, 'minute': minute, 'messages': count}
-                                    for (channel_id, minute), count in activity.items()])
+                                    for (channel_id, minute), count in activity.items()
+                                    if channel_id not in blocked_channels])
         return self.db.save_chat_presence(rows)
 
     async def _join_channels(self, ws, logins: List[str]):
@@ -298,6 +284,7 @@ async def fetch_teams(twitch, db, user_ids: List[str]) -> int:
                 for u in team.users or []]
 
     rows = [row for members in await _gather_limited(team_members, sorted(team_ids)) for row in members]
+    rows = OptOutList(db).filter(rows)
     db.save_team_members(rows)
     print(f"👥 Stored {len(rows)} memberships across {len(team_ids)} teams")
     return len(rows)
@@ -312,11 +299,13 @@ async def fetch_shared_chat(twitch, db, user_ids: List[str]) -> int:
             print(f"⚠️ Shared chat lookup failed for {user_id}: {e}")
             return None
 
+    opt_outs = OptOutList(db)
     rows = {}
     for session in await _gather_limited(session_for, user_ids):
         if not session:
             continue
-        participants = sorted({p.broadcaster_id for p in session.participants or []})
+        participants = sorted({p.broadcaster_id for p in session.participants or []
+                               if not opt_outs.contains(p.broadcaster_id)})
         ts = session.created_at.isoformat(timespec='seconds') if session.created_at else utc_now()
         for a_id, b_id in combinations(participants, 2):
             rows[(a_id, b_id, ts)] = {'a_id': a_id, 'b_id': b_id, 'ts': ts, 'source': 'shared_chat'}

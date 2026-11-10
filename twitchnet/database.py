@@ -83,6 +83,17 @@ EXTRA_TABLES = [
         PRIMARY KEY (channel_id, minute))''',
     # Chat overlap self-joins chat_presence on chatter_hash
     'CREATE INDEX IF NOT EXISTS idx_chat_presence_chatter ON chat_presence (chatter_hash)',
+    # Accounts that opted out, as salted hashes of their user id (see twitchnet/privacy.py)
+    'CREATE TABLE IF NOT EXISTS opt_outs (user_hash TEXT PRIMARY KEY, requested_at TEXT)',
+]
+
+# Every (table, column) holding a Twitch user id, for opt-out deletion
+USER_ID_COLUMNS = [
+    ('streamers', 'user_id'), ('stream_snapshots', 'user_id'), ('follower_snapshots', 'user_id'),
+    ('chat_presence', 'channel_id'), ('chat_activity', 'channel_id'), ('raids', 'from_id'), ('raids', 'to_id'),
+    ('team_members', 'user_id'), ('collabs', 'a_id'), ('collabs', 'b_id'), ('videos', 'user_id'),
+    ('clips', 'broadcaster_id'), ('schedules', 'user_id'), ('tracked_channels', 'user_id'),
+    ('communities', 'node_id'), ('centrality_scores', 'node_id'),
 ]
 
 # Columns added to EXTRA_TABLES after their first release: table -> {column: type}
@@ -664,6 +675,42 @@ class DatabaseManager:
     def remove_tracked_channels(self, user_ids: List[str]):
         with self.conn:
             self.conn.executemany("DELETE FROM tracked_channels WHERE user_id = ?", [(uid,) for uid in user_ids])
+
+    # ==================== PRIVACY OPERATIONS ====================
+
+    def load_opt_outs(self) -> set:
+        return {row[0] for row in self.conn.execute("SELECT user_hash FROM opt_outs")}
+
+    def forget_user(self, user_id: str, chatter_hash: str, requested_at: str) -> Dict[str, int]:
+        """Record an opt-out and delete all data about the account; returns rows deleted per table"""
+        # Overwrite deleted content instead of leaving it in free database pages
+        self.conn.execute("PRAGMA secure_delete=ON")
+        deleted: Dict[str, int] = {}
+
+        def count(table: str, rows: int):
+            deleted[table] = deleted.get(table, 0) + rows
+
+        with self.conn:
+            self.conn.execute("INSERT OR IGNORE INTO opt_outs (user_hash, requested_at) VALUES (?, ?)",
+                              (chatter_hash, requested_at))
+            count('chat_presence', self.conn.execute(
+                "DELETE FROM chat_presence WHERE chatter_hash = ?", (chatter_hash,)).rowcount)
+            for table, column in USER_ID_COLUMNS:
+                count(table, self.conn.execute(f"DELETE FROM {table} WHERE {column} = ?", (user_id,)).rowcount)
+
+            # Saved graphs are pickled and carry each node's channel data
+            for graph_id, graph_bytes in self.conn.execute(
+                    "SELECT graph_id, graph_data FROM network_graphs").fetchall():
+                graph = pickle.loads(graph_bytes)
+                if user_id in graph:
+                    graph.remove_node(user_id)
+                    self.conn.execute(
+                        "UPDATE network_graphs SET graph_data = ?, node_count = ?, edge_count = ? WHERE graph_id = ?",
+                        (pickle.dumps(graph), graph.number_of_nodes(), graph.number_of_edges(), graph_id))
+                    count('network_graphs', 1)
+
+        self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        return deleted
 
     # ==================== UTILITY OPERATIONS ====================
 

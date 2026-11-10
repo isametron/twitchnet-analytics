@@ -24,6 +24,7 @@ from twitchnet.config import Config
 from twitchnet.content import fetch_clips, fetch_schedules, fetch_top_games, fetch_videos
 from twitchnet.database import DatabaseManager
 from twitchnet.metrics import SNAPSHOT_INTERVAL_S
+from twitchnet.privacy import OptOutList
 from twitchnet.relations import (
     ChatPresenceLogger,
     extract_title_mentions,
@@ -48,6 +49,7 @@ async def collect_live(db: DatabaseManager, limit: int):
         streamers = await collector.get_top_streamers(max_results=limit)
     finally:
         await collector.close()
+    streamers = OptOutList(db).filter(streamers)
     db.save_streamers(streamers)
     return streamers
 
@@ -56,6 +58,7 @@ def seed(db: DatabaseManager, limit: int, streamers=None, replace: bool = False)
     """Track the given streamers, or the ones with the most followers in the database"""
     if streamers is None:
         streamers = db.load_streamers()
+    streamers = OptOutList(db).filter(streamers)
     streamers = sorted(streamers, key=lambda s: s.get('follower_count') or 0, reverse=True)[:limit]
     if replace:
         db.remove_tracked_channels([t['user_id'] for t in db.load_tracked_channels()])
@@ -133,7 +136,6 @@ async def run(args):
     if not tracked:
         print("No tracked channels yet. Collect streamers in the app, then run: python tracker.py --seed")
         return
-    ids = [t['user_id'] for t in tracked]
     print(f"Tracking {len(tracked)} channels")
 
     collector = TwitchDataCollector(Config.TWITCH_CLIENT_ID, Config.TWITCH_CLIENT_SECRET)
@@ -143,12 +145,29 @@ async def run(args):
     chat = None if args.no_chat else ChatPresenceLogger(db, [t['login'] for t in tracked])
 
     stats = {'snapshots': 0}
+
+    # Each job re-reads the tracked list, so a channel that opts out stops being collected right away
+    def current_ids():
+        return [t['user_id'] for t in db.load_tracked_channels()]
+
+    async def live_job():
+        await poll_live(collector, db, db.load_tracked_channels(), stats)
+
+    async def followers_job():
+        await snapshot_followers(collector, db, current_ids())
+
+    async def content_job():
+        await refresh_content(collector, db, current_ids())
+
+    async def teams_job():
+        await fetch_teams(collector.twitch, db, current_ids())
+
     tasks = [
-        asyncio.create_task(every(SNAPSHOT_INTERVAL_S, 'Live poll', poll_live, collector, db, tracked, stats)),
+        asyncio.create_task(every(SNAPSHOT_INTERVAL_S, 'Live poll', live_job)),
         asyncio.create_task(every(TOP_GAMES_REFRESH_S, 'Top categories', refresh_top_games, collector, db)),
-        asyncio.create_task(every(FOLLOWERS_REFRESH_S, 'Follower snapshot', snapshot_followers, collector, db, ids)),
-        asyncio.create_task(every(CONTENT_REFRESH_S, 'Content refresh', refresh_content, collector, db, ids)),
-        asyncio.create_task(every(TEAMS_REFRESH_S, 'Team refresh', fetch_teams, collector.twitch, db, ids)),
+        asyncio.create_task(every(FOLLOWERS_REFRESH_S, 'Follower snapshot', followers_job)),
+        asyncio.create_task(every(CONTENT_REFRESH_S, 'Content refresh', content_job)),
+        asyncio.create_task(every(TEAMS_REFRESH_S, 'Team refresh', teams_job)),
         asyncio.create_task(report_status(chat, stats, time.time())),
     ]
     if chat:

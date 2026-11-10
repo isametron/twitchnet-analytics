@@ -159,7 +159,7 @@ For runs of several days, put the tracker on a server: [deploy/README.md](deploy
 
 `main.py --mode real|hybrid` builds the network from this data (`hybrid` keeps attribute edges as weak background ties). Recommendations use the tracked history automatically: engagement from average viewers and chat activity, content matching from game history, reach from average viewers, and brand safety from Twitch content labels.
 
-**Privacy:** the chat logger never stores message text. Chatters are stored only as salted SHA-256 hashes of their user id, with the salt kept locally in `data/processed/chat_salt.json`, to measure audience overlap between channels.
+**Privacy:** see [PRIVACY.md](PRIVACY.md); opt-outs are processed with `python scripts/opt_out.py <username>`. The chat logger never stores message text. Chatters are stored only as salted SHA-256 hashes of their user id, with the salt kept locally in `data/processed/chat_salt.json`, to measure audience overlap between channels.
 
 ### Tests
 

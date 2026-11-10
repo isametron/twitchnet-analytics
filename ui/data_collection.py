@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from twitchnet.config import Config
+from twitchnet.privacy import OptOutList
 from twitchnet.twitch_api import TwitchDataCollector
 
 
@@ -109,6 +110,7 @@ def render():
                 status_text.text(f"✅ Collected {len(all_streamers)} streamers so far...")
 
             status_text.text("💾 Saving data...")
+            all_streamers = OptOutList(st.session_state.db).filter(all_streamers)
             collector.save_data(all_streamers, 'streamers.json')
             await collector.close()
             progress_bar.progress(1.0)

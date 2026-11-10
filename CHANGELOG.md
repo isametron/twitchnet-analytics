@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Engagement uses tracked average viewers and chat activity; content matching uses game history; campaign reach uses average viewers
 - `raid_influence` centrality: PageRank on the directed raid graph
 - Server deployment (`deploy/`): systemd service that keeps the tracker running, daily 20:00 UTC re-seed of the top 300 live channels with database backup, setup script and Azure VM guide
+- `PRIVACY.md` notice and `scripts/opt_out.py`: deletes an account's data as a chatter and as a channel, and keeps it out of future collection (stored only as a salted hash)
 - `scripts/backup_db.py`: consistent database backups while the tracker is writing (`--keep N` prunes old copies)
 
 ### Changed
