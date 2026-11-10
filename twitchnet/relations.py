@@ -33,7 +33,7 @@ IRC_MAX_CHANNELS = 100  # per connection, to stay well inside Twitch's limits; m
 IRC_CONNECTION_STAGGER_S = 5  # delay between opening connections, so their JOIN bursts don't overlap
 CHAT_FLUSH_INTERVAL_S = 30
 EVENTSUB_MAX_SUBSCRIPTIONS = 300  # per WebSocket connection
-API_CONCURRENCY = 8
+API_CONCURRENCY = 4  # keeps team and Shared Chat lookups under Twitch's 800 requests/minute
 
 MENTION_RE = re.compile(r'@([A-Za-z0-9_]{3,25})')
 

@@ -37,6 +37,12 @@ TOP_GAMES_REFRESH_S = 3600
 FOLLOWERS_REFRESH_S = 6 * 3600
 CONTENT_REFRESH_S = 6 * 3600
 TEAMS_REFRESH_S = 24 * 3600
+# Seconds after start before each job first runs, so their request bursts don't overlap
+# (all at once exceeds Twitch's 800 requests/minute after every start and daily re-seed)
+TOP_GAMES_START_S = 60
+TEAMS_START_S = 120
+FOLLOWERS_START_S = 300
+CONTENT_START_S = 420
 STATUS_INTERVAL_S = 300
 DEFAULT_SEED_LIMIT = 100
 
@@ -110,8 +116,9 @@ async def refresh_top_games(collector: TwitchDataCollector, db: DatabaseManager)
     print(f"🎮 Top categories saved ({await fetch_top_games(collector.twitch, db)})")
 
 
-async def every(interval_s: float, name: str, func, *args):
-    """Run func(*args) now and then every interval_s seconds; errors are logged, not fatal"""
+async def every(interval_s: float, name: str, func, *args, start_delay_s: float = 0):
+    """Run func(*args) after start_delay_s, then every interval_s seconds; errors are logged, not fatal"""
+    await asyncio.sleep(start_delay_s)
     while True:
         try:
             await func(*args)
@@ -164,10 +171,12 @@ async def run(args):
 
     tasks = [
         asyncio.create_task(every(SNAPSHOT_INTERVAL_S, 'Live poll', live_job)),
-        asyncio.create_task(every(TOP_GAMES_REFRESH_S, 'Top categories', refresh_top_games, collector, db)),
-        asyncio.create_task(every(FOLLOWERS_REFRESH_S, 'Follower snapshot', followers_job)),
-        asyncio.create_task(every(CONTENT_REFRESH_S, 'Content refresh', content_job)),
-        asyncio.create_task(every(TEAMS_REFRESH_S, 'Team refresh', teams_job)),
+        asyncio.create_task(every(TOP_GAMES_REFRESH_S, 'Top categories', refresh_top_games, collector, db,
+                                  start_delay_s=TOP_GAMES_START_S)),
+        asyncio.create_task(every(TEAMS_REFRESH_S, 'Team refresh', teams_job, start_delay_s=TEAMS_START_S)),
+        asyncio.create_task(every(FOLLOWERS_REFRESH_S, 'Follower snapshot', followers_job,
+                                  start_delay_s=FOLLOWERS_START_S)),
+        asyncio.create_task(every(CONTENT_REFRESH_S, 'Content refresh', content_job, start_delay_s=CONTENT_START_S)),
         asyncio.create_task(report_status(chat, stats, time.time())),
     ]
     if chat:

@@ -9,7 +9,8 @@ from typing import Dict, List, Optional
 
 from twitchAPI.type import TwitchResourceNotFound, VideoType
 
-API_CONCURRENCY = 8
+# ~0.5 s per request, so 3 in parallel is ~360/min: under Twitch's 800/min even next to other jobs
+API_CONCURRENCY = 3
 VIDEOS_PER_CHANNEL = 20
 CLIPS_PER_CHANNEL = 20
 CLIP_WINDOW_DAYS = 30

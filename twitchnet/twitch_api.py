@@ -114,7 +114,8 @@ class TwitchDataCollector:
                 result = await self._retry_with_backoff(
                     self.twitch.get_channel_followers, broadcaster_id=user_id, first=1
                 )
-                return user_id, (result.total if result else None)
+                # twitchAPI returns the failed response after waiting out a rate limit; it has no total
+                return user_id, getattr(result, 'total', None)
 
         self.request_count += len(user_ids)
         return dict(await asyncio.gather(*(fetch_one(uid) for uid in user_ids)))

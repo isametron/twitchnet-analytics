@@ -202,3 +202,15 @@ def test_retry_recovers_after_transient_failures(monkeypatch, failures):
 
     collector = TwitchDataCollector('id', 'secret')
     assert asyncio.run(collector._retry_with_backoff(flaky)) == 'ok'
+
+
+def test_follower_response_without_total_counts_as_unknown():
+    """After a rate-limit wait twitchAPI returns the failed response, which has no 'total'"""
+    fake = FakeTwitch(n_streams=2)
+
+    async def rate_limited(broadcaster_id, first=None):
+        return SimpleNamespace(data=[])  # no 'total' attribute
+    fake.get_channel_followers = rate_limited
+
+    records = asyncio.run(make_collector(fake).get_top_streamers(max_results=2))
+    assert [r['follower_count_known'] for r in records] == [False, False]

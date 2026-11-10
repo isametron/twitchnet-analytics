@@ -79,3 +79,20 @@ def test_poll_live_batches_100_ids_per_request(db):
 def test_follower_snapshot_skips_failed_lookups(db):
     asyncio.run(tracker.snapshot_followers(FakeCollector(live=set()), db, ['1', '2', '3']))
     assert sorted((r['user_id'], r['followers']) for r in db.load_follower_snapshots()) == [('1', 1000), ('2', 2000)]
+
+
+def test_every_waits_for_start_delay(monkeypatch):
+    sleeps, calls = [], []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+        if len(sleeps) > 1:
+            raise asyncio.CancelledError
+
+    async def job():
+        calls.append(1)
+
+    monkeypatch.setattr(tracker.asyncio, 'sleep', fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(tracker.every(60, 'job', job, start_delay_s=300))
+    assert sleeps == [300, 60] and calls == [1]
