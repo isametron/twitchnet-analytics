@@ -119,7 +119,8 @@ lib/
 
 
 # =========================
-# Research paper material (kept local, not published)
+# Research paper material and drafts (kept local, not published)
 # =========================
 reports/
 research_notes/
+papers/
