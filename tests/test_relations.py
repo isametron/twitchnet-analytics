@@ -179,3 +179,8 @@ def test_flush_writes_per_minute_message_counts(db):
         {'channel_id': '111', 'minute': '2026-10-01T10:05:00+00:00', 'messages': 2},
         {'channel_id': '111', 'minute': '2026-10-01T10:06:00+00:00', 'messages': 2},
     ]
+
+
+def test_irc_requests_commands_capability():
+    """Without twitch.tv/commands Twitch never delivers USERNOTICE, so raids would go unrecorded"""
+    assert set(relations.IRC_CAPABILITIES.split()) == {'twitch.tv/tags', 'twitch.tv/commands'}

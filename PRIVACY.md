@@ -37,7 +37,7 @@ Email **siddhantverma.ad23@bmsce.ac.in** with your Twitch username and "TwitchNe
 2. keep your account out of future collection, by retaining only a salted hash of your user id for that purpose; and
 3. confirm by email once it's done.
 
-Copies in our automatic backups are removed as those backups rotate out, within 7 days. Results that were already aggregated or published can't be changed, but they don't identify individual chatters.
+Copies in our automatic backups are removed as those backups rotate out, within 2 days. Results that were already aggregated or published can't be changed, but they don't identify individual chatters.
 
 ## Changes
 

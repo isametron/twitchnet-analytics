@@ -31,6 +31,8 @@ IRC_JOINS_PER_WINDOW = 20  # anonymous connections may JOIN 20 channels per 10 s
 IRC_JOIN_WINDOW_S = 10
 IRC_MAX_CHANNELS = 100  # per connection, to stay well inside Twitch's limits; more channels open more connections
 IRC_CONNECTION_STAGGER_S = 5  # delay between opening connections, so their JOIN bursts don't overlap
+# tags: room-id and user-id on every message; commands: USERNOTICE, which carries raid notices
+IRC_CAPABILITIES = 'twitch.tv/tags twitch.tv/commands'
 CHAT_FLUSH_INTERVAL_S = 30
 EVENTSUB_MAX_SUBSCRIPTIONS = 300  # per WebSocket connection
 API_CONCURRENCY = 4  # keeps team and Shared Chat lookups under Twitch's 800 requests/minute
@@ -162,8 +164,8 @@ class ChatPresenceLogger:
 
     async def _session(self, session: aiohttp.ClientSession, logins: List[str], number: int):
         async with session.ws_connect(IRC_URL, heartbeat=60) as ws:
-            # twitch.tv/tags adds room-id and user-id, so chatters are keyed by stable ids
-            await ws.send_str('CAP REQ :twitch.tv/tags')
+            # Tags key chatters by stable ids; commands is required for raid USERNOTICEs to be delivered
+            await ws.send_str(f'CAP REQ :{IRC_CAPABILITIES}')
             await ws.send_str('PASS SCHMOOPIIE')
             await ws.send_str(f'NICK justinfan{random.randint(10000, 99999)}')
             self.connected += 1

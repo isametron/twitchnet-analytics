@@ -9,7 +9,7 @@ What runs on the server:
 | Unit | What it does |
 |------|--------------|
 | `twitchnet-tracker.service` | Runs `tracker.py` continuously; restarts it after crashes and reboots |
-| `twitchnet-reseed.timer` | Daily at 20:00 UTC (01:30 IST): adds the top 300 live channels to the tracked list, backs up the database (keeps 7), restarts the tracker |
+| `twitchnet-reseed.timer` | Daily at 20:00 UTC (01:30 IST): adds the top 300 live channels to the tracked list, backs up the database (keeps 2), restarts the tracker |
 
 Sampling rule this gives: *every channel in the top 300 live at 20:00 UTC on any day of the run*.
 Channels are added, never removed, so each keeps its full history.
@@ -115,7 +115,7 @@ cd ~/twitchnet-analytics && .venv/bin/python scripts/opt_out.py <username>
 
 It deletes the account's data as a chatter and as a channel, and keeps it out of future collection
 while the tracker keeps running. Then replace any downloaded copies of the database with a fresh
-backup, and confirm to the person by email. Server backups clear within 7 days as they rotate.
+backup, and confirm to the person by email. Server backups clear within 2 days as they rotate.
 
 ## 8. Update the code
 

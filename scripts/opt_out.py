@@ -49,7 +49,7 @@ def main():
     if unknown:
         print(f"NOT processed, Twitch doesn't know these usernames: {', '.join(unknown)}. "
               "Ask for the numeric user id and use --user-id.")
-    print("Backups keep old rows until they rotate out (7 days on the server). "
+    print("Backups keep old rows until they rotate out (2 days on the server). "
           "Re-export any CSVs and replace downloaded copies of the database.")
     sys.exit(1 if unknown else 0)
 
